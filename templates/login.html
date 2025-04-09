@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login | Manpower App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f6f8;
+        }
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: #0078D4;
+            color: white;
+            padding: 8px 16px;
+            height: 60px;
+        }
+
+        .top-bar .logo img {
+            height: 50px; /* Increased from 40px */
+        }
+
+        .top-bar h1 {
+            font-size: 24px; /* Reduced font size to fit better */
+            flex-grow: 1;
+            text-align: center;
+            margin: 0;
+            position: absolute;
+            left: 0;
+            right: 0;
+            margin-left: auto;
+            margin-right: auto;
+            width: fit-content;
+        }
+        .login-container {
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .login-container h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .login-container input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .login-container button {
+            width: 100%;
+            padding: 12px;
+            background-color: #0078D4;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .login-container button:hover {
+            background-color: #005A9E;
+        }
+
+        .sso-btn {
+            background-color: #2b6cb0;
+            margin-top: 10px;
+        }
+
+        ul {
+            margin: 10px 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        ul li {
+            color: red;
+            font-size: 14px;
+        }
+
+        @media (max-width: 500px) {
+            .top-bar h1 {
+                font-size: 16px;
+                margin-right: 20px;
+            }
+
+            .login-container {
+                margin: 30px 20px;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='Company Logo1.png') }}" alt="Company Logo">
+        </div>
+        <h1>Manpower Requisition</h1>
+    </div>
+
+    <div class="login-container">
+        <h2>Login</h2>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <ul>
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Login</button>
+        </form>
+
+        <form method="GET" action="{{ url_for('sso_login') }}">
+            <button class="sso-btn">Login with Azure SSO</button>
+        </form>
+    </div>
+
+</body>
+</html>
