@@ -1,1 +1,4 @@
 .env
+DOC
+flask_session
+.flask_session
