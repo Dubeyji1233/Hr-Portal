@@ -100,85 +100,59 @@
       margin-left: 220px;
       padding: 40px;
     }
-
-    .form-row {
-      display: flex;
-      gap: 20px;
-      margin-bottom: 20px;
-    }
-
-    .form-row .form-group {
-      flex: 1;
-    }
-
-    .form-group label {
-      display: block;
-      margin-bottom: 5px;
-      font-weight: 600;
-    }
-
-    .form-group input {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-    }
-
-    .submit-btn {
-      background-color: #0078D4;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-
-    .submit-btn:hover {
-      background-color: #005A9E;
-    }
   </style>
 </head>
 <body>
 
+  <!-- Sidebar -->
   <div class="sidebar">
     <div class="logo">
       <img src="{{ url_for('static', filename='Company Logo1.png') }}" alt="Company Logo">
     </div>
     <hr>
-    <a href="#">Request Requisition</a>
-    <a href="#">Repo</a>
+    {% set role = user['role'] %}
+    <a href="{{ url_for('home', page='dashboard') }}">Dashboard</a>
+
+    {% if role == 'admin' or role == 'manager' %}
+      <a href="{{ url_for('home', page='requisition') }}">Request Requisition</a>
+    {% endif %}
+
+    {% if role in ['admin', 'hr', 'manager'] %}
+      <a href="{{ url_for('home', page='repository') }}">Repository</a>
+    {% endif %}
+
+    {% if role == 'admin' %}
+      <a href="{{ url_for('home', page='usermanagement') }}">User Management</a>
+    {% endif %}
   </div>
 
+  <!-- Top Bar -->
   <div class="top-bar">
     <div class="title">Manpower Portal</div>
     <div class="user-info">
       <div class="user-text">
-        <span>{{ session['user']['email'] }}</span>
-        <span>{{ session['user']['role'] }}</span>
+        <span>{{ user.email }}</span>
+        <span>{{ user.role }}</span>
       </div>
       <img src="{{ url_for('static', filename='avatar.jpg') }}" alt="User">
     </div>
   </div>
 
+
   <div class="main-content">
-    <h2>Request Requisition</h2>
-    <form method="POST" action="/submit-requisition">
-      <div class="form-row">
-        <div class="form-group">
-          <label for="position">Position</label>
-          <input type="text" id="position" name="position" required>
-        </div>
-        <div class="form-group">
-          <label for="location">Location</label>
-          <input type="text" id="location" name="location" required>
-        </div>
-        <div class="form-group">
-          <label for="count">Number of Vacancies</label>
-          <input type="number" id="count" name="count" required>
-        </div>
-      </div>
-      <button type="submit" class="submit-btn">Submit Request</button>
-    </form>
+    {% if page == 'dashboard' %}
+      {% include 'dashboard.html' %}
+    {% elif page == 'requisition' %}
+      {% include 'requisition.html' %}
+    {% elif page == 'repository' %}
+      {% include 'repository.html' %}
+    {% elif page == 'usermanagement' %}
+      {% include 'usermanagement.html' %}
+    {% elif page == 'notallowed' %}
+      <h3>You are not authorized to view this page.</h3>
+    {% else %}
+      <h3>Page not found.</h3>
+    {% endif %}
   </div>
 
 </body>
