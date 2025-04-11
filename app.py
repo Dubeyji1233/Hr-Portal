@@ -152,29 +152,80 @@ def home():
     if 'user' not in session:
         return redirect(url_for('login'))
 
-    # Default page
     page = request.args.get('page', 'dashboard')
     user_role = session['user']['role']
 
-    print("Logged in as:", session['user'])
-
-    # Define allowed pages for non-admins
     allowed_pages = {
-        'Hiring Manager': ['dashboard', 'requisition', 'repository'],
-        'HR': ['dashboard', 'repository'],
+        'manager': ['dashboard', 'requisition', 'repository', 'view_requisitions'],
+        'hr': ['dashboard', 'repository', 'view_requisitions'],
     }
 
-    # Admin gets access to all pages
-    all_pages = ['dashboard', 'requisition', 'repository', 'usermanagement']
-    if user_role == 'admin':
-        allowed = all_pages
-    else:
-        allowed = allowed_pages.get(user_role, [])
+    all_pages = ['dashboard', 'requisition', 'repository', 'usermanagement', 'view_requisitions']
+    allowed = all_pages if user_role == 'admin' else allowed_pages.get(user_role, [])
 
     if page not in allowed:
         page = 'notallowed'
 
-    return render_template('home.html', user=session['user'], page=page)
+    # Requisition data only when viewing that page
+    requisitions = []
+    if page == 'view_requisitions':
+        connection = get_db_connection()
+        if connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT * FROM requisitions ORDER BY created_at DESC")
+                requisitions = cursor.fetchall()
+            connection.close()
+
+    return render_template(
+        'home.html',
+        user=session['user'],
+        page=page,
+        requisitions=requisitions
+    )
+
+@app.route('/submit_requisition', methods=['POST'])
+def submit_requisition():
+    data = request.form
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Insert into requisitions
+            cursor.execute("""
+                INSERT INTO requisitions (
+                    job_title, department, number_of_openings,
+                    skills_required, location, hiring_type,
+                    budget,job_description, created_by
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                data['job_title'], data['department'], data['number_of_openings'],
+                data['skills_required'], data['location'], data['hiring_type'],
+                data['budget'],data['job_description'], session['user']['email']
+            ))
+            requisition_id = conn.insert_id()
+
+            # Insert Interview Hierarchy
+            levels = int(data['levels'])
+            for i in range(1, levels + 1):
+                cursor.execute("""
+                    INSERT INTO interview_hierarchy (
+                        requisition_id, level, interviewer_name, interviewer_email
+                    ) VALUES (%s, %s, %s, %s)
+                """, (
+                    requisition_id, i, data[f'interviewer_name_{i}'], data[f'interviewer_email_{i}']
+                ))
+        conn.commit()
+        flash('Requisition submitted successfully!')
+    except Exception as e:
+        print(e)
+        conn.rollback()
+        flash('An error occurred while submitting the requisition.')
+    finally:
+        conn.close()
+    return redirect(url_for('home', page='requisition'))
+
+
+
+
 
 @app.route('/logout')
 def logout():

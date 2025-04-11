@@ -100,6 +100,52 @@
       margin-left: 220px;
       padding: 40px;
     }
+    .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+
+  .avatar:hover {
+    transform: scale(1.05);
+  }
+
+
+  .dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 45px;
+    right: 0;
+    background: linear-gradient(135deg, #e6f2ff, #d0e4ff);
+    min-width: 110px;
+    border: 1px solid #007bff;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15);
+    z-index: 1;
+    padding: 4px 0;
+    text-align: center;
+    font-family: 'Segoe UI', sans-serif;
+  }
+
+  .dropdown-menu a {
+    display: block;
+    padding: 6px 10px;
+    text-decoration: none;
+    color: #0056b3;
+    font-weight: 500;
+    font-size: 13px;
+    border-radius: 6px;
+    transition: all 0.2s ease-in-out;
+  }
+
+  .dropdown-menu a:hover {
+    background: linear-gradient(135deg, #007bff, #3399ff);
+    color: #fff;
+    transform: translateY(-1px);
+  }
+
   </style>
 </head>
 <body>
@@ -130,30 +176,58 @@
   <div class="top-bar">
     <div class="title">Manpower Portal</div>
     <div class="user-info">
-      <div class="user-text">
-        <span>{{ user.email }}</span>
-        <span>{{ user.role }}</span>
+    <div class="user-text">
+      <span>{{ user.email }}</span>
+      <span>{{ user.role }}</span>
+    </div>
+
+    <div class="dropdown">
+      <img src="{{ url_for('static', filename='avatar.jpg') }}" alt="User" class="avatar" onclick="toggleDropdown()">
+      <div id="dropdown-menu" class="dropdown-menu">
+        <a href="{{ url_for('logout') }}">Logout</a>
       </div>
-      <img src="{{ url_for('static', filename='avatar.jpg') }}" alt="User">
+    </div>
     </div>
   </div>
 
 
   <div class="main-content">
-    {% if page == 'dashboard' %}
-      {% include 'dashboard.html' %}
-    {% elif page == 'requisition' %}
-      {% include 'requisition.html' %}
-    {% elif page == 'repository' %}
-      {% include 'repository.html' %}
-    {% elif page == 'usermanagement' %}
-      {% include 'usermanagement.html' %}
-    {% elif page == 'notallowed' %}
-      <h3>You are not authorized to view this page.</h3>
-    {% else %}
-      <h3>Page not found.</h3>
-    {% endif %}
+    {% block content %}
+      {% if page == 'dashboard' %}
+        {% include 'dashboard.html' %}
+      {% elif page == 'requisition' %}
+        {% include 'requisition.html' %}
+      {% elif page == 'repository' %}
+        {% include 'repository.html' %}
+      {% elif page == 'usermanagement' %}
+        {% include 'usermanagement.html' %}
+      {% elif page == 'view_requisitions' %}
+        {% include 'view_requisitions.html' %}
+      {% elif page == 'notallowed' %}
+        <h3>You are not authorized to view this page.</h3>
+      {% else %}
+        <h3>Page not found.</h3>
+      {% endif %}
+    {% endblock %}
   </div>
+
+
+  <script>
+    function toggleDropdown() {
+      const menu = document.getElementById('dropdown-menu');
+      menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+    }
+
+    // Optional: Close dropdown if clicked outside
+    window.onclick = function(event) {
+      if (!event.target.matches('.avatar')) {
+        const dropdown = document.getElementById("dropdown-menu");
+        if (dropdown && dropdown.style.display === 'block') {
+          dropdown.style.display = 'none';
+        }
+      }
+    }
+  </script>
 
 </body>
 </html>

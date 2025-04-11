@@ -7,7 +7,7 @@ CREATE TABLE users (
     email VARCHAR(150) UNIQUE NOT NULL,
     azure_oid VARCHAR(255) UNIQUE,
     password_hash VARCHAR(255),
-    role ENUM('HR', 'Reviewer', 'Manager', 'Admin', 'Static') NOT NULL,
+    role ENUM('hr', 'reviewer', 'manager', 'admin', 'static') NOT NULL,
     department VARCHAR(100),
     is_external BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
