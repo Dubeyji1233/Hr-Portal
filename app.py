@@ -346,7 +346,7 @@ def view_requisitions():
             if user['role'] in ['admin', 'hr lead']:
                 # Admins and HR Leads see all requisitions
                 cursor.execute("""
-                    SELECT r.id, r.job_title, r.department, r.created_at,
+                    SELECT r.id, r.job_title, r.department, r.created_at, r.created_by,
                            r.assigned_to, u1.name AS created_by_name, u2.name AS assigned_to_name
                     FROM requisitions r
                     LEFT JOIN users u1 ON r.created_by = u1.email
@@ -356,7 +356,7 @@ def view_requisitions():
             else:
                 # HR sees only their own assigned requisitions
                 cursor.execute("""
-                    SELECT r.id, r.job_title, r.department, r.created_at,
+                    SELECT r.id, r.job_title, r.department, r.created_at,r.created_by,
                            r.assigned_to, u1.name AS created_by_name, u2.name AS assigned_to_name
                     FROM requisitions r
                     LEFT JOIN users u1 ON r.created_by = u1.email
