@@ -1,9 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, flash,render_template, request, redirect, url_for, session, flash
 import pymysql
 import msal
 from datetime import timedelta
 from dotenv import load_dotenv
 import os
+import msal
+import requests
+
 
 load_dotenv()
 
@@ -18,7 +21,7 @@ CLIENT_ID = os.getenv("AZURE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 REDIRECT_PATH = "/getAToken"
-SCOPE = ["User.Read"]
+SCOPE = ["User.Read", "Mail.Send"]
 
 # DB Connection
 def get_db_connection():
@@ -143,10 +146,11 @@ def auth_response():
 
         if user_data:
             session["user"] = user_data
+            session["access_token"] = result["access_token"]
             return redirect(url_for('home'))
 
     return "SSO Login failed", 401
-
+# ------------------------------------------------------------------------------------#
 @app.route('/home')
 def home():
     if 'user' not in session:
@@ -158,31 +162,21 @@ def home():
     allowed_pages = {
         'manager': ['dashboard', 'requisition', 'repository', 'view_requisitions'],
         'hr': ['dashboard', 'repository', 'view_requisitions'],
+        'hr lead': ['dashboard', 'repository', 'view_requisitions','assign_requisition' ]
     }
 
-    all_pages = ['dashboard', 'requisition', 'repository', 'usermanagement', 'view_requisitions']
+    all_pages = ['dashboard', 'requisition', 'repository', 'usermanagement', 'view_requisitions','assign_requisition']
     allowed = all_pages if user_role == 'admin' else allowed_pages.get(user_role, [])
 
     if page not in allowed:
         page = 'notallowed'
 
-    # Requisition data only when viewing that page
-    requisitions = []
-    if page == 'view_requisitions':
-        connection = get_db_connection()
-        if connection:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT * FROM requisitions ORDER BY created_at DESC")
-                requisitions = cursor.fetchall()
-            connection.close()
-
     return render_template(
         'home.html',
         user=session['user'],
-        page=page,
-        requisitions=requisitions
+        page=page
     )
-
+# ------------------------------------------------------------------------------------#
 @app.route('/submit_requisition', methods=['POST'])
 def submit_requisition():
     data = request.form
@@ -214,7 +208,13 @@ def submit_requisition():
                     requisition_id, i, data[f'interviewer_name_{i}'], data[f'interviewer_email_{i}']
                 ))
         conn.commit()
-        flash('Requisition submitted successfully!')
+        # ✅ Email Notification to HR
+        success, message = send_requisition_email(data)
+        if success:
+            flash('Requisition submitted and email sent successfully!')
+        else:
+            flash(f'Requisition submitted, but email failed: {message}')
+
     except Exception as e:
         print(e)
         conn.rollback()
@@ -222,9 +222,193 @@ def submit_requisition():
     finally:
         conn.close()
     return redirect(url_for('home', page='requisition'))
+# ------------------------------------------------------------------------------------#
+def send_requisition_email(requisition_data):
+    access_token = session.get("access_token")
+    user = session.get("user")
+
+    if not access_token or not user:
+        return False, "User not authenticated."
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    email_body = f"""
+Hi HR Team,
+
+A new requisition has been submitted by {user['name']}.
+
+Job Title: {requisition_data['job_title']}
+Department: {requisition_data['department']}
+No. of Openings: {requisition_data['number_of_openings']}
+Skills Required: {requisition_data['skills_required']}
+Location: {requisition_data['location']}
+Budget: {requisition_data['budget']}
+Type: {requisition_data['hiring_type']}
+
+Regards,
+{user['name']}
+"""
+
+    message = {
+        "message": {
+            "subject": "New Hiring Requisition Submitted",
+            "body": {
+                "contentType": "Text",
+                "content": email_body
+            },
+            "toRecipients": [
+                {"emailAddress": {"address": "virajhumbre@orientindia.net"}}
+            ]
+        },
+        "saveToSentItems": "true"
+    }
+
+    response = requests.post(
+        'https://graph.microsoft.com/v1.0/me/sendMail',
+        headers=headers,
+        json=message
+    )
+
+    if response.status_code == 202:
+        return True, "Mail sent"
+    else:
+        return False, f"Failed to send mail: {response.text}"
+# ------------------------------------------------------------------------------------#
+@app.route('/assign_requisition', methods=['GET', 'POST'])
+def assign_requisition():
+
+    if 'user' not in session or session['user']['role'] not in ['hr lead', 'admin']:
+        return redirect(url_for('home'))
+
+    user = session.get('user')
+    conn = get_db_connection()
+    requisitions = []
+    hr_users = []
+    success_message = None
+
+    try:
+        with conn.cursor() as cursor:
+
+            cursor.execute("""
+                SELECT r.id, r.job_title, r.department, u.name AS created_by
+                FROM requisitions r
+                JOIN users u ON r.created_by = u.email
+                WHERE r.assigned_to IS NULL
+                ORDER BY r.created_at DESC
+            """)
+            requisitions = cursor.fetchall()
 
 
+            cursor.execute("SELECT id, name, email FROM users WHERE role = 'hr'")
+            hr_users = cursor.fetchall()
 
+
+            # Handle form submission (POST)
+            if request.method == 'POST':
+                requisition_id = request.form['requisition_id']
+                assigned_to = request.form['assigned_to']
+
+                # Update the requisition assignment
+                cursor.execute("""
+                    UPDATE requisitions
+                    SET assigned_to = %s
+                    WHERE id = %s
+                """, (assigned_to, requisition_id))
+                conn.commit()
+
+                flash("Requisition successfully assigned!", "success")
+                # Redirect to the same page to refresh and update the dropdown
+                return redirect(url_for('assign_requisition'))
+
+    except Exception as e:
+        print("Error:", str(e))
+
+    finally:
+        conn.close()
+
+    return render_template('assign_requisition.html', requisitions=requisitions, hr_users=hr_users,  user=user)
+# ------------------------------------------------------------------------------------#
+
+@app.route('/view_requisitions')
+def view_requisitions():
+    if 'user' not in session:
+        return redirect(url_for('home'))
+
+    user = session['user']
+    conn = get_db_connection()
+    requisitions = []
+
+    try:
+        with conn.cursor() as cursor:
+            if user['role'] in ['admin', 'hr lead']:
+                # Admins and HR Leads see all requisitions
+                cursor.execute("""
+                    SELECT r.id, r.job_title, r.department, r.created_at,
+                           r.assigned_to, u1.name AS created_by_name, u2.name AS assigned_to_name
+                    FROM requisitions r
+                    LEFT JOIN users u1 ON r.created_by = u1.email
+                    LEFT JOIN users u2 ON r.assigned_to = u2.email
+                    ORDER BY r.created_at DESC
+                """)
+            else:
+                # HR sees only their own assigned requisitions
+                cursor.execute("""
+                    SELECT r.id, r.job_title, r.department, r.created_at,
+                           r.assigned_to, u1.name AS created_by_name, u2.name AS assigned_to_name
+                    FROM requisitions r
+                    LEFT JOIN users u1 ON r.created_by = u1.email
+                    LEFT JOIN users u2 ON r.assigned_to = u2.email
+                    WHERE r.assigned_to = %s
+                    ORDER BY r.created_at DESC
+                """, (user['email'],))
+
+            requisitions = cursor.fetchall()
+
+    except Exception as e:
+        print("Error in view_requisitions:", e)
+        flash("Something went wrong fetching requisitions", "danger")
+    finally:
+        conn.close()
+
+    return render_template('view_requisitions.html', requisitions=requisitions, user=session['user'] )
+
+# ------------------------------------------------------------------------------------#
+@app.route('/user_management')
+def user_management():
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM users")
+            db_users = cursor.fetchall()
+    finally:
+        connection.close()
+    return render_template('user_management.html', users=db_users,user=session['user'])
+
+# Route: Update role
+@app.route('/update-role/<int:user_id>', methods=['POST'])
+def update_role(user_id):
+    new_role = request.form.get('role')
+
+    if not new_role:
+        flash("Invalid role selected.", "danger")
+        return redirect(url_for('user_management'))
+
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = "UPDATE users SET role = %s WHERE id = %s"
+            cursor.execute(sql, (new_role, user_id))
+        connection.commit()
+        flash("Role updated successfully.", "success")
+    finally:
+        connection.close()
+
+    return redirect(url_for('user_management'))
+
+# ------------------------------------------------------------------------------------#
 
 
 @app.route('/logout')
@@ -244,3 +428,5 @@ def logout():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5005)
+
+

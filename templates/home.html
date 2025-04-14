@@ -163,12 +163,20 @@
       <a href="{{ url_for('home', page='requisition') }}">Request Requisition</a>
     {% endif %}
 
+    {% if role == 'admin' or role == 'hr lead' %}
+      <a href="{{ url_for('assign_requisition') }}">Assign Requisition</a>
+    {% endif %}
+
+    {% if role in ['admin', 'hr', 'manager', 'hr lead'] %}
+      <a href="{{ url_for('view_requisitions') }}">View Requisitions</a>
+    {% endif %}
+
     {% if role in ['admin', 'hr', 'manager'] %}
       <a href="{{ url_for('home', page='repository') }}">Repository</a>
     {% endif %}
 
     {% if role == 'admin' %}
-      <a href="{{ url_for('home', page='usermanagement') }}">User Management</a>
+      <a href="{{ url_for('user_management') }}">User Management</a>
     {% endif %}
   </div>
 
@@ -201,6 +209,8 @@
         {% include 'repository.html' %}
       {% elif page == 'usermanagement' %}
         {% include 'usermanagement.html' %}
+      {% elif page == 'assign_requisition' %}
+        {% include 'assign_requisition.html' %}
       {% elif page == 'view_requisitions' %}
         {% include 'view_requisitions.html' %}
       {% elif page == 'notallowed' %}

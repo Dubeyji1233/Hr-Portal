@@ -1,0 +1,144 @@
+{% extends "home.html" %}
+
+{% block head %}
+  {{ super() }}
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+
+    h2 {
+      text-align: center;
+      margin-top: 30px;
+      font-weight: bold;
+      color: #343a40;
+    }
+
+    .form-container {
+      max-width: 600px;
+      margin: 40px auto;
+      background-color: #ffffff;
+      border-radius: 15px;
+      padding: 30px 25px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .form-container label {
+      font-weight: 600;
+      margin-bottom: 5px;
+      display: block;
+    }
+
+    .form-container select,
+    .form-container button {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      border: 1px solid #ced4da;
+      font-size: 15px;
+    }
+
+    .form-container button {
+      background-color: #007bff;
+      color: white;
+      font-weight: bold;
+      transition: background-color 0.3s ease;
+    }
+
+    .form-container button:hover {
+      background-color: #0056b3;
+    }
+
+    .flash-popup {
+      position: fixed;
+      top: 15%;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #ffffff;
+      border: 1px solid #dee2e6;
+      border-radius: 10px;
+      box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);
+      padding: 20px;
+      z-index: 9999;
+      display: none;
+      min-width: 300px;
+    }
+
+    .flash-message {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    #close-popup {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: #999;
+      cursor: pointer;
+      position: absolute;
+      top: 8px;
+      right: 12px;
+    }
+
+    .alert-success { border-left: 5px solid #28a745; }
+    .alert-danger { border-left: 5px solid #dc3545; }
+    .alert-info { border-left: 5px solid #17a2b8; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <h2>Assign Requisition</h2>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-popup" id="flash-popup">
+        {% for category, message in messages %}
+          <div class="flash-message alert alert-{{ category }}">
+            {{ message }}
+            <button id="close-popup" onclick="closePopup()">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="form-container">
+    <form method="POST">
+      <label for="requisition_id">Select Requisition:</label>
+      <select name="requisition_id" required>
+        <option value="" disabled selected>None</option>
+        {% for r in requisitions %}
+          <option value="{{ r.id }}">{{ r.job_title }} - {{ r.department }} (Created by: {{ r.created_by }})</option>
+        {% endfor %}
+      </select>
+
+      <label for="assigned_to">Assign to HR:</label>
+      <select name="assigned_to" required>
+        <option value="" disabled selected>None</option>
+        {% for hr in hr_users %}
+          <option value="{{ hr.email }}">{{ hr.name }} ({{ hr.email }})</option>
+        {% endfor %}
+      </select>
+
+      <button type="submit">Assign</button>
+    </form>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    function closePopup() {
+      var popup = document.getElementById('flash-popup');
+      if (popup) popup.style.display = 'none';
+    }
+
+    window.addEventListener("DOMContentLoaded", function () {
+      var popup = document.getElementById('flash-popup');
+      if (popup) popup.style.display = 'block';
+
+      setTimeout(closePopup, 5000);
+    });
+  </script>
+{% endblock %}
