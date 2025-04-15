@@ -373,11 +373,16 @@ def view_requisitions():
     finally:
         conn.close()
 
-    return render_template('view_requisitions.html', requisitions=requisitions, user=session['user'] )
+    return render_template('view_requisitions.html', requisitions=requisitions, user=user )
 
 # ------------------------------------------------------------------------------------#
 @app.route('/user_management')
 def user_management():
+    print("Session contents:", session)
+    user = session.get('user')
+    print(user)
+    email = session['user']['email']
+    print ("Email", email)
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -385,7 +390,7 @@ def user_management():
             db_users = cursor.fetchall()
     finally:
         connection.close()
-    return render_template('user_management.html', users=db_users,user=session['user'])
+    return render_template('user_management.html', users=db_users,user=user)
 
 # Route: Update role
 @app.route('/update-role/<int:user_id>', methods=['POST'])
@@ -410,6 +415,57 @@ def update_role(user_id):
 
 # ------------------------------------------------------------------------------------#
 
+def get_requisitions(email, user):
+    connection = get_db_connection()
+    with connection.cursor() as cursor:
+        if user in ['admin', 'hr lead']:
+            cursor.execute("SELECT * FROM requisitions")
+        else:
+            cursor.execute("SELECT * FROM requisitions WHERE assigned_to = %s", (email,))
+        requisitions = cursor.fetchall()
+    connection.close()
+    return requisitions
+
+
+@app.route('/submit_candidate', methods=['GET', 'POST'])
+def submit_candidate():
+    print("Session contents:", session)
+    if 'user' not in session:
+        return redirect(url_for('home'))
+
+
+    user_id = session['user']['email']
+    user = session['user']['role']
+    requisitions = get_requisitions(user_id, user)
+
+    if request.method == 'POST':
+        name = request.form['name']
+        email = request.form['email']
+        phone = request.form['phone']
+        skills = request.form['skills']
+        requisition_id = request.form['requisition_id']
+        resume_file = request.files['resume']
+
+        allowed_ids = [str(r['id']) for r in requisitions]
+        if requisition_id not in allowed_ids:
+            return "Unauthorized access to requisition", 403
+
+        resume_blob = resume_file.read()
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO candidates (name, email, phone, skills, requisition_id, resume)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (name, email, phone, skills, requisition_id, resume_blob))
+            connection.commit()
+        connection.close()
+
+        return "Candidate submitted successfully!"
+
+    return render_template('submit_candidate.html', requisitions=requisitions, user = session['user'])
+
+# ------------------------------------------------------------------------------------#
 
 @app.route('/logout')
 def logout():

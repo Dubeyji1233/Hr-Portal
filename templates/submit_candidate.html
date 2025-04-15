@@ -1,0 +1,133 @@
+{% extends "home.html" %}
+
+{% block content %}
+  <style>
+    .requisition-form {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 25px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+
+    .requisition-form h2 {
+      margin-top: 0;
+      margin-bottom: 20px;
+      text-align: center;
+      color: #333;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+    }
+
+    .form-group {
+      flex: 1;
+      min-width: 250px;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 5px;
+      color: #555;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    textarea {
+      resize: vertical;
+    }
+
+    .full-width {
+      flex: 1 1 100%;
+    }
+
+    .fancy-btn {
+      display: inline-block;
+      padding: 10px 22px;
+      font-size: 14px;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, #007bff, #0056b3);
+      border: none;
+      border-radius: 25px;
+      text-decoration: none;
+      box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2);
+      transition: all 0.3s ease;
+      cursor: pointer;
+      margin-top: 20px;
+      align-self: flex-end;
+    }
+
+    .fancy-btn:hover {
+      background: linear-gradient(135deg, #0056b3, #007bff);
+      box-shadow: 0 6px 15px rgba(0, 123, 255, 0.35);
+      text-decoration: none;
+      transform: translateY(-1px);
+    }
+  </style>
+
+  <div class="requisition-form">
+    <h2>Candidate Submission Form</h2>
+    <form method="POST" enctype="multipart/form-data">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="name">Candidate Name</label>
+          <input type="text" name="name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Candidate Email</label>
+          <input type="email" name="email" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="phone">Phone</label>
+          <input type="text" name="phone" required>
+        </div>
+
+        <div class="form-group">
+          <label for="skills">Skills</label>
+          <input type="text" name="skills" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group full-width">
+          <label for="requisition_id">Select Requisition</label>
+          <select name="requisition_id" required>
+            {% for req in requisitions %}
+              <option value="{{ req.id }}">{{ req.job_title }} ({{ req.department }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group full-width">
+          <label for="resume">Upload Resume (PDF, DOC)</label>
+          <input type="file" name="resume" accept=".pdf,.doc,.docx" required>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end;">
+        <button type="submit" class="fancy-btn">Submit</button>
+      </div>
+
+    </form>
+  </div>
+{% endblock %}
