@@ -45,11 +45,13 @@ CREATE TABLE candidates (
     phone VARCHAR(15),
     resume BLOB,
     requisition_id INT,
-    submitted_by INT,
+    submitted_by varchar(100),
     shortlisted_by INT,
     shortlisted_on DATETIME,
     is_shortlisted BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (requisition_id) REFERENCES requisitions(id),
-    FOREIGN KEY (submitted_by) REFERENCES users(id),
+    FOREIGN KEY (submitted_by) REFERENCES users(email),
     FOREIGN KEY (shortlisted_by) REFERENCES users(id)
 );
+
+

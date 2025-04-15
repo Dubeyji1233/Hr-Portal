@@ -456,9 +456,9 @@ def submit_candidate():
         connection = get_db_connection()
         with connection.cursor() as cursor:
             cursor.execute("""
-                INSERT INTO candidates (name, email, phone, skills, requisition_id, resume)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (name, email, phone, skills, requisition_id, resume_blob))
+                INSERT INTO candidates (name, email, phone, skills, requisition_id, resume, submitted_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (name, email, phone, skills, requisition_id, resume_blob, user_id))
             connection.commit()
         connection.close()
 
@@ -467,6 +467,37 @@ def submit_candidate():
     return render_template('submit_candidate.html', requisitions=requisitions, user = session['user'])
 
 # ------------------------------------------------------------------------------------#
+@app.route('/view_candidates')
+def view_candidates():
+    if 'user' not in session:
+        return redirect(url_for('home'))
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            if session['role'] == 'hr':
+                query = """
+                    SELECT c.*, r.title AS requisition_title
+                    FROM candidates c
+                    JOIN requisitions r ON c.requisition_id = r.id
+                    WHERE c.submitted_by = %s
+                """
+                cursor.execute(query, (session['email'],))
+            else:
+                query = """
+                    SELECT c.*, r.title AS requisition_title
+                    FROM candidates c
+                    JOIN requisitions r ON c.requisition_id = r.id
+                """
+                cursor.execute(query)
+
+            candidates = cursor.fetchall()
+    finally:
+        conn.close()
+
+    return render_template('view_candidates.html', candidates=candidates)
+
+
 
 
 # ------------------------------------------------------------------------------------#
