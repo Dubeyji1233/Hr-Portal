@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import os
 import msal
 import requests
+from datetime import datetime
 
 
 load_dotenv()
@@ -467,6 +468,8 @@ def submit_candidate():
 
 # ------------------------------------------------------------------------------------#
 
+
+# ------------------------------------------------------------------------------------#
 @app.route('/logout')
 def logout():
     user = session.get("user")

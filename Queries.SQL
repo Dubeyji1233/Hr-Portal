@@ -43,8 +43,13 @@ CREATE TABLE candidates (
     name VARCHAR(100),
     email VARCHAR(100),
     phone VARCHAR(15),
-    skills TEXT,
+    resume BLOB,
     requisition_id INT,
-    resume longblob,
-    FOREIGN KEY (requisition_id) REFERENCES requisitions(id)
+    submitted_by INT,
+    shortlisted_by INT,
+    shortlisted_on DATETIME,
+    is_shortlisted BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (requisition_id) REFERENCES requisitions(id),
+    FOREIGN KEY (submitted_by) REFERENCES users(id),
+    FOREIGN KEY (shortlisted_by) REFERENCES users(id)
 );
