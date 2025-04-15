@@ -3,63 +3,83 @@
 {% block head %}
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+
   <style>
-    /* Styling for the requisition form */
-    .requisition-form {
-      max-width: 1000px;
-      margin: 0 auto 20px auto;
-      padding: 25px;
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+    /* Basic styling */
+    body {
+      background-color: #f1f3f5;
     }
 
-    .requisition-form h2 {
-      margin-bottom: 20px;
+    h2 {
       text-align: center;
+      margin-top: 20px;
+      font-weight: bold;
       color: #333;
+      font-size: 2rem;
     }
 
-    /* Flex layout for the form rows */
+    .requisition-form {
+      max-width: 900px;
+      margin: 30px auto;
+      padding: 40px;
+      background: #fff;
+      border-radius: 15px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    }
+
     .form-row {
       display: flex;
-      gap: 20px;
       flex-wrap: wrap;
+      gap: 20px;
     }
 
-    /* Styling for individual form fields */
-    .form-row label {
-      font-weight: 600;
-      margin-bottom: 5px;
-      display: block;
+    /* Styling for input fields and select */
+    .form-group {
+      flex: 1;
+      min-width: 250px;
     }
 
-    .form-row select,
-    .form-row input {
+    .form-group select,
+    .form-group input {
       width: 100%;
-      padding: 10px;
+      padding: 12px;
       margin-bottom: 20px;
-      border-radius: 8px;
+      border-radius: 10px;
       border: 1px solid #ced4da;
       font-size: 15px;
+      transition: border-color 0.3s ease;
     }
 
-    .form-row button {
+    .form-group select:focus,
+    .form-group input:focus {
+      border-color: #007bff;
+      box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+    }
+
+    /* Button Styles */
+    .fancy-btn {
       width: 100%;
-      padding: 10px;
+      padding: 12px 20px;
       background-color: #007bff;
       color: white;
+      font-size: 16px;
       font-weight: bold;
-      border-radius: 8px;
+      border-radius: 30px;
       border: none;
-      transition: background-color 0.3s ease;
+      transition: background-color 0.3s ease, transform 0.2s ease;
+      cursor: pointer;
     }
 
-    .form-row button:hover {
+    .fancy-btn:hover {
       background-color: #0056b3;
+      transform: translateY(-2px);
     }
 
-    /* Style for flash message popup */
+    .fancy-btn:active {
+      transform: translateY(2px);
+    }
+
+    /* Flash message popup */
     .flash-popup {
       position: fixed;
       top: 15%;
@@ -73,12 +93,17 @@
       z-index: 9999;
       display: none;
       min-width: 300px;
+      animation: fadeIn 1s ease-in-out;
     }
 
     .flash-message {
       margin: 0;
       font-size: 16px;
     }
+
+    .alert-success { border-left: 5px solid #28a745; }
+    .alert-danger { border-left: 5px solid #dc3545; }
+    .alert-info { border-left: 5px solid #17a2b8; }
 
     #close-popup {
       background: none;
@@ -91,29 +116,20 @@
       right: 12px;
     }
 
-    .alert-success { border-left: 5px solid #28a745; }
-    .alert-danger { border-left: 5px solid #dc3545; }
-    .alert-info { border-left: 5px solid #17a2b8; }
-
-    .fancy-btn {
-    display: inline-block;
-    padding: 8px 18px;
-    font-size: 14px;
-    font-weight: 600;
-    color: white;
-    background: linear-gradient(135deg, #007bff, #0056b3);
-    border: none;
-    border-radius: 25px;
-    text-decoration: none;
-    box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2);
-    transition: all 0.3s ease;
+    @keyframes fadeIn {
+      0% { opacity: 0; }
+      100% { opacity: 1; }
     }
 
-    .fancy-btn:hover {
-      background: linear-gradient(135deg, #0056b3, #007bff);
-      box-shadow: 0 6px 15px rgba(0, 123, 255, 0.35);
-      text-decoration: none;
-      transform: translateY(-1px);
+    /* Responsive styling */
+    @media (max-width: 768px) {
+      .form-row {
+        flex-direction: column;
+      }
+
+      .fancy-btn {
+        width: 100%;
+      }
     }
   </style>
 {% endblock %}
@@ -140,7 +156,7 @@
         <div class="form-group">
           <label for="requisition_id">Select Requisition:</label>
           <select name="requisition_id" required>
-            <option value="" disabled selected>None</option>
+            <option value="" disabled selected>Select a Requisition</option>
             {% for r in requisitions %}
               <option value="{{ r.id }}">{{ r.job_title }} - {{ r.department }} (Created by: {{ r.created_by }})</option>
             {% endfor %}
@@ -150,7 +166,7 @@
         <div class="form-group">
           <label for="assigned_to">Assign to HR:</label>
           <select name="assigned_to" required>
-            <option value="" disabled selected>None</option>
+            <option value="" disabled selected>Select HR</option>
             {% for hr in hr_users %}
               <option value="{{ hr.email }}">{{ hr.name }} ({{ hr.email }})</option>
             {% endfor %}
@@ -158,7 +174,6 @@
         </div>
       </div>
 
-      <br><br>
       <div style="text-align: center; margin-top: 20px;">
         <button type="submit" class="fancy-btn">Assign Requisition</button>
       </div>
