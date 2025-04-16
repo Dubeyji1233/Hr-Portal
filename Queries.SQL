@@ -12,7 +12,6 @@ CREATE TABLE users (
     is_external BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    assigned_to VARCHAR(255)
 );
 
 CREATE TABLE interview_hierarchy (
@@ -36,6 +35,7 @@ CREATE TABLE requisitions (
     job_description TEXT,
     created_by VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    assigned_to VARCHAR(255)
 );
 
 
