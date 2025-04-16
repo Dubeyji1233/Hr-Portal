@@ -1,12 +1,14 @@
-from flask import Flask, flash,render_template, request, redirect, url_for, session, flash
+from flask import send_file,Flask, flash,render_template, request, redirect, url_for, session, flash,jsonify
 import pymysql
 import msal
-from datetime import timedelta
+from datetime import datetime,timedelta
 from dotenv import load_dotenv
 import os
 import msal
 import requests
 from datetime import datetime
+import io
+import pytz
 
 
 load_dotenv()
@@ -22,7 +24,7 @@ CLIENT_ID = os.getenv("AZURE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 REDIRECT_PATH = "/getAToken"
-SCOPE = ["User.Read", "Mail.Send"]
+SCOPE = ["User.Read", "Mail.Send","Calendars.ReadWrite"," OnlineMeetings.ReadWrite"]
 
 # DB Connection
 def get_db_connection():
@@ -475,17 +477,17 @@ def view_candidates():
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            if session['role'] == 'hr':
+            if session['user']['role'] == 'hr':
                 query = """
-                    SELECT c.*, r.title AS requisition_title
+                    SELECT c.*, r.job_title AS requisition_title
                     FROM candidates c
                     JOIN requisitions r ON c.requisition_id = r.id
                     WHERE c.submitted_by = %s
                 """
-                cursor.execute(query, (session['email'],))
+                cursor.execute(query, (session['user']['email'],))
             else:
                 query = """
-                    SELECT c.*, r.title AS requisition_title
+                    SELECT c.*, r.job_title AS requisition_title
                     FROM candidates c
                     JOIN requisitions r ON c.requisition_id = r.id
                 """
@@ -495,10 +497,226 @@ def view_candidates():
     finally:
         conn.close()
 
-    return render_template('view_candidates.html', candidates=candidates)
+    return render_template('view_candidates.html', candidates=candidates, user = session['user'])
+
+
+@app.route('/download_resume/<int:candidate_id>')
+def download_resume(candidate_id):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT name, resume FROM candidates WHERE id = %s", (candidate_id,))
+            result = cursor.fetchone()
+
+            if result and result['resume']:
+                return send_file(
+                    io.BytesIO(result['resume']),
+                    download_name=f"{result['name']}_Resume.pdf",
+                    as_attachment=True
+                )
+            else:
+                return "No resume found for this candidate.", 404
+    finally:
+        conn.close()
+
+@app.route('/shortlist_candidate/<int:candidate_id>', methods=['POST'])
+def shortlist_candidate(candidate_id):
+    if 'user' not in session:
+        return redirect(url_for('home'))
+
+    user = session['user']
+    email = user['email']
+    name = user['name']
+    now = datetime.now()
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    # Step 1: Get the user ID based on the email from the session
+    cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+    result = cursor.fetchone()
+    if not result:
+        cursor.close()
+        connection.close()
+        return jsonify({'success': False, 'error': 'User not found'})
+
+    user_id = result['id']
+
+    # Step 2: Update candidate as shortlisted
+    query = """
+        UPDATE candidates
+        SET is_shortlisted = TRUE,
+            shortlisted_by = %s,
+            shortlisted_on = %s
+        WHERE id = %s
+    """
+    cursor.execute(query, (user_id, now, candidate_id))
+    connection.commit()
+    cursor.close()
+    connection.close()
+
+    return jsonify({
+        'success': True,
+        'shortlisted_by': name,
+        'shortlisted_on': now.strftime('%Y-%m-%d %H:%M')
+    })
+
+# ------------------------------------------------------------------------------------#
+@app.route('/schedule_interview/<int:candidate_id>', methods=['GET', 'POST'])
+def schedule_interview(candidate_id):
+    if 'user' not in session:
+        return redirect(url_for('home'))
+
+    connection = get_db_connection()
+    cursor = connection.cursor(pymysql.cursors.DictCursor)
+
+    if request.method == 'POST':
+        level = request.form['level']
+        interview_datetime_str = request.form['interview_datetime']
+
+        # Convert to datetime object
+        interview_datetime = datetime.strptime(interview_datetime_str, '%Y-%m-%dT%H:%M')
+
+        # Get hierarchy info
+        cursor.execute("""
+            SELECT ih.*, c.email as candidate_email, c.name as candidate_name
+            FROM interview_hierarchy ih
+            JOIN candidates c ON ih.requisition_id = c.requisition_id
+            WHERE c.id = %s AND ih.level = %s
+        """, (candidate_id, level))
+        result = cursor.fetchone()
+
+        if not result:
+            flash('Invalid level or candidate', 'danger')
+            return redirect(request.url)
+
+        # Save to interview_schedule table
+        cursor.execute("""
+            INSERT INTO interview_schedule (candidate_id, level, interview_datetime, interviewer_name, interviewer_email)
+            VALUES (%s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE interview_datetime = VALUES(interview_datetime)
+        """, (candidate_id, level, interview_datetime_str, result['interviewer_name'], result['interviewer_email']))
+        connection.commit()
+
+        # Get access token (example – you should retrieve it securely)
+        access_token = session.get('access_token')  # Replace with your token logic
+
+        try:
+            send_teams_invite(
+                interviewer_email=result['interviewer_email'],
+                candidate_email=result['candidate_email'],
+                start_time=interview_datetime,
+                duration_minutes=30,  # or customize based on form input
+                subject=f"Interview for Candidate {result['candidate_name']} - Level {level}",
+                location="Microsoft Teams Meeting",
+                description="This is a scheduled interview. Please be on time.",
+                access_token=access_token
+            )
+        except Exception as e:
+            print("Error sending invite:", e)
+            flash("Interview scheduled, but failed to send Teams invite.", "warning")
+
+        return render_template('schedule_interview.html', candidate_id=candidate_id, hierarchy=get_hierarchy(candidate_id), scheduled={
+            'level': level,
+            'interviewer_name': result['interviewer_name'],
+            'time': interview_datetime_str
+        }, user=session['user'])
+
+    # GET method
+    return render_template('schedule_interview.html', candidate_id=candidate_id, hierarchy=get_hierarchy(candidate_id), scheduled=None, user=session['user'])
 
 
 
+def get_hierarchy(candidate_id):
+    cursor = get_db_connection().cursor(pymysql.cursors.DictCursor)
+    cursor.execute("SELECT requisition_id FROM candidates WHERE id = %s", (candidate_id,))
+    req = cursor.fetchone()
+    cursor.execute("SELECT * FROM interview_hierarchy WHERE requisition_id = %s ORDER BY level", (req['requisition_id'],))
+    return cursor.fetchall()
+
+def send_teams_invite(interviewer_email, candidate_email, start_time, duration_minutes, subject, location, description, access_token):
+    # Ensure timezone-aware datetime (UTC)
+    if start_time.tzinfo is None:
+        start_time = pytz.utc.localize(start_time)
+
+    end_time = start_time + timedelta(minutes=duration_minutes)
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    event_payload = {
+        "subject": subject,
+        "body": {
+            "contentType": "HTML",
+            "content": description
+        },
+        "start": {
+            "dateTime": start_time.strftime('%Y-%m-%dT%H:%M:%S'),
+            "timeZone": "Asia/Kolkata"
+        },
+        "end": {
+            "dateTime": end_time.strftime('%Y-%m-%dT%H:%M:%S'),
+            "timeZone": "Asia/Kolkata"
+        },
+        "location": {
+            "displayName": location
+        },
+        "attendees": [
+            {
+                "emailAddress": {
+                    "address": candidate_email,
+                    "name": "Candidate"
+                },
+                "type": "required"
+            },
+            {
+                "emailAddress": {
+                    "address": interviewer_email,
+                    "name": "Interviewer"
+                },
+                "type": "required"
+            }
+        ],
+        "isOnlineMeeting": True,
+        "onlineMeetingProvider": "teamsForBusiness"
+    }
+
+    response = requests.post(
+        f"https://graph.microsoft.com/v1.0/users/{interviewer_email}/events",
+        headers=headers,
+        json=event_payload
+    )
+
+    if response.status_code >= 400:
+        raise Exception(f"Failed to send Teams invite: {response.status_code} {response.text}")
+
+    return response.json()
+@app.route('/edit_schedule/<int:candidate_id>/<int:level>', methods=['GET', 'POST'])
+def edit_schedule(candidate_id, level):
+    conn = get_db_connection()
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+    if request.method == 'POST':
+        new_time = request.form['interview_datetime']
+        cursor.execute("""
+            UPDATE interview_schedule
+            SET interview_datetime = %s
+            WHERE candidate_id = %s AND level = %s
+        """, (new_time, candidate_id, level))
+        conn.commit()
+
+        # Optionally: Re-send updated invite
+        cursor.execute("SELECT interviewer_email FROM interview_schedule WHERE candidate_id = %s AND level = %s", (candidate_id, level))
+        email = cursor.fetchone()['interviewer_email']
+        send_teams_invite(email, new_time, candidate_id)  # Re-send invite with updated time
+
+        return redirect(url_for('schedule_interview', candidate_id=candidate_id))
+
+    cursor.execute("SELECT * FROM interview_schedule WHERE candidate_id = %s AND level = %s", (candidate_id, level))
+    schedule = cursor.fetchone()
+    return render_template('edit_schedule.html', schedule=schedule)
 
 # ------------------------------------------------------------------------------------#
 @app.route('/logout')

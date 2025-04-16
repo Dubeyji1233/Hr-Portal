@@ -137,18 +137,18 @@
 {% block content %}
   <h2>Assign Requisition</h2>
 
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div class="flash-popup" id="flash-popup">
-        {% for category, message in messages %}
-          <div class="flash-message alert alert-{{ category }}">
-            {{ message }}
-            <button id="close-popup" onclick="closePopup()">×</button>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-  {% endwith %}
+<!--  {% with messages = get_flashed_messages(with_categories=true) %}-->
+<!--    {% if messages %}-->
+<!--      <div class="flash-popup" id="flash-popup">-->
+<!--        {% for category, message in messages %}-->
+<!--          <div class="flash-message alert alert-{{ category }}">-->
+<!--            {{ message }}-->
+<!--            <button id="close-popup" onclick="closePopup()">×</button>-->
+<!--          </div>-->
+<!--        {% endfor %}-->
+<!--      </div>-->
+<!--    {% endif %}-->
+<!--  {% endwith %}-->
 
   <div class="requisition-form">
     <form method="POST">

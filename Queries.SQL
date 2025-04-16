@@ -12,6 +12,7 @@ CREATE TABLE users (
     is_external BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    assigned_to VARCHAR(255)
 );
 
 CREATE TABLE interview_hierarchy (
@@ -43,6 +44,7 @@ CREATE TABLE candidates (
     name VARCHAR(100),
     email VARCHAR(100),
     phone VARCHAR(15),
+    skills text,
     resume BLOB,
     requisition_id INT,
     submitted_by varchar(100),
@@ -54,4 +56,13 @@ CREATE TABLE candidates (
     FOREIGN KEY (shortlisted_by) REFERENCES users(id)
 );
 
-
+CREATE TABLE interview_schedule (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    candidate_id INT,
+    level INT,
+    interview_datetime DATETIME,
+    interviewer_name VARCHAR(255),
+    interviewer_email VARCHAR(255),
+    UNIQUE(candidate_id, level),
+    FOREIGN KEY (candidate_id) REFERENCES candidates(id)
+);

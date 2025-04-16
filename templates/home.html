@@ -175,6 +175,10 @@
       <a href="{{ url_for('submit_candidate') }}">Submit Candidate</a>
     {% endif %}
 
+    {% if role in ['admin', 'hr', 'manager', 'hr lead'] %}
+      <a href="{{ url_for('view_candidates') }}">View Candidates</a>
+    {% endif %}
+
     {% if role in ['admin', 'hr', 'manager'] %}
       <a href="{{ url_for('home', page='repository') }}">Repository</a>
     {% endif %}
