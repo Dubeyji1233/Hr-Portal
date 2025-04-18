@@ -189,12 +189,12 @@ def submit_requisition():
             # Insert into requisitions
             cursor.execute("""
                 INSERT INTO requisitions (
-                    job_title, department, number_of_openings,
+                    job_title, number_of_openings,
                     skills_required, location, hiring_type,
                     budget,job_description, created_by
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (
-                data['job_title'], data['department'], data['number_of_openings'],
+                data['job_title'], data['number_of_openings'],
                 data['skills_required'], data['location'], data['hiring_type'],
                 data['budget'],data['job_description'], session['user']['email']
             ))
@@ -205,10 +205,13 @@ def submit_requisition():
             for i in range(1, levels + 1):
                 cursor.execute("""
                     INSERT INTO interview_hierarchy (
-                        requisition_id, level, interviewer_name, interviewer_email
-                    ) VALUES (%s, %s, %s, %s)
+                        requisition_id, level, interviewer_name, interviewer_email,
+                        interviewer_department, interviewer_involvement
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
                 """, (
-                    requisition_id, i, data[f'interviewer_name_{i}'], data[f'interviewer_email_{i}']
+                    requisition_id, i, data[f'interviewer_name_{i}'], data[f'interviewer_email_{i}'],
+                    data[f'interviewer_department_{i}'],
+                    data[f'interviewer_involvement_{i}']
                 ))
         conn.commit()
         # ✅ Email Notification to HR
@@ -244,7 +247,6 @@ Hi HR Team,
 A new requisition has been submitted by {user['name']}.
 
 Job Title: {requisition_data['job_title']}
-Department: {requisition_data['department']}
 No. of Openings: {requisition_data['number_of_openings']}
 Skills Required: {requisition_data['skills_required']}
 Location: {requisition_data['location']}
@@ -486,41 +488,59 @@ def get_requisitions(email, user):
 
 @app.route('/submit_candidate', methods=['GET', 'POST'])
 def submit_candidate():
-    print("Session contents:", session)
     if 'user' not in session:
         return redirect(url_for('home'))
-
 
     user_id = session['user']['email']
     user = session['user']['role']
     requisitions = get_requisitions(user_id, user)
 
     if request.method == 'POST':
-        name = request.form['name']
+        # Fetch all updated form fields
+        first_name = request.form['first_name']
+        last_name = request.form['last_name']
         email = request.form['email']
         phone = request.form['phone']
+        current_location = request.form['current_location']
+        total_experience = request.form['total_experience']
+        current_ctc = request.form['current_ctc']
+        expected_ctc = request.form['expected_ctc']
+        current_organization = request.form['current_organization']
+        current_designation = request.form['current_designation']
         skills = request.form['skills']
         requisition_id = request.form['requisition_id']
         resume_file = request.files['resume']
 
+        # Check if requisition ID is valid for the logged-in user
         allowed_ids = [str(r['id']) for r in requisitions]
         if requisition_id not in allowed_ids:
             return "Unauthorized access to requisition", 403
 
         resume_blob = resume_file.read()
 
+
+
         connection = get_db_connection()
         with connection.cursor() as cursor:
             cursor.execute("""
-                INSERT INTO candidates (name, email, phone, skills, requisition_id, resume, submitted_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (name, email, phone, skills, requisition_id, resume_blob, user_id))
+                INSERT INTO candidates (
+                    email, phone, skills, requisition_id, resume, submitted_by,
+                    first_name, last_name, current_location, total_experience,
+                    current_ctc, expected_ctc, current_organization, current_designation
+                )
+                VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                 email, phone, skills, requisition_id, resume_blob, user_id,
+                first_name, last_name, current_location, total_experience,
+                current_ctc, expected_ctc, current_organization, current_designation
+            ))
             connection.commit()
         connection.close()
 
         return "Candidate submitted successfully!"
 
-    return render_template('submit_candidate.html', requisitions=requisitions, user = session['user'])
+    return render_template('submit_candidate.html', requisitions=requisitions, user=session['user'])
+
 
 # ------------------------------------------------------------------------------------#
 @app.route('/view_candidates')
@@ -533,7 +553,7 @@ def view_candidates():
         with conn.cursor() as cursor:
             if session['user']['role'] == 'hr':
                 query = """
-                    SELECT c.*, r.job_title AS requisition_title
+                    SELECT c.*,concat(c.first_name,' ',c.last_name) as full_name, r.job_title AS requisition_title
                     FROM candidates c
                     JOIN requisitions r ON c.requisition_id = r.id
                     WHERE c.submitted_by = %s
@@ -559,13 +579,13 @@ def download_resume(candidate_id):
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT name, resume FROM candidates WHERE id = %s", (candidate_id,))
+            cursor.execute("SELECT concat(first_name,' ',last_name) as full_name, resume FROM candidates WHERE id = %s", (candidate_id,))
             result = cursor.fetchone()
 
             if result and result['resume']:
                 return send_file(
                     io.BytesIO(result['resume']),
-                    download_name=f"{result['name']}_Resume.pdf",
+                    download_name=f"{result['full_name']}_Resume.pdf",
                     as_attachment=True
                 )
             else:
@@ -628,7 +648,7 @@ def candidate_detail(id):
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT c.*, r.job_title, r.department
+                SELECT c.*,r.job_title
                 FROM candidates c
                 LEFT JOIN requisitions r ON c.requisition_id = r.id
                 WHERE c.id = %s
@@ -667,7 +687,7 @@ def schedule_interview(candidate_id):
 
         # Get hierarchy info
         cursor.execute("""
-            SELECT ih.*, c.email as candidate_email, c.name as candidate_name
+            SELECT ih.*, c.email as candidate_email, c.first_name as candidate_name
             FROM interview_hierarchy ih
             JOIN candidates c ON ih.requisition_id = c.requisition_id
             WHERE c.id = %s AND ih.level = %s

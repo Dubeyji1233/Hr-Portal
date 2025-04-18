@@ -100,58 +100,110 @@
       }
     }
   </style>
+<div class="requisition-form">
+  <h2>Candidate Submission Form</h2>
+  <form method="POST" enctype="multipart/form-data">
 
-  <div class="requisition-form">
-    <h2>Candidate Submission Form</h2>
-    <form method="POST" enctype="multipart/form-data">
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="name">Candidate Name</label>
-          <input type="text" name="name" required>
-        </div>
-
-        <div class="form-group">
-          <label for="email">Candidate Email</label>
-          <input type="email" name="email" required>
-        </div>
+    <!-- Row 1: First and Last Name -->
+    <div class="form-row">
+      <div class="form-group">
+        <label for="first_name">First Name</label>
+        <input type="text" name="first_name" required>
       </div>
 
-      <div class="form-row">
-        <div class="form-group">
-          <label for="phone">Phone</label>
-          <input type="text" name="phone" required>
-        </div>
+      <div class="form-group">
+        <label for="last_name">Last Name</label>
+        <input type="text" name="last_name" required>
+      </div>
+    </div>
 
-        <div class="form-group">
-          <label for="skills">Skills</label>
-          <input type="text" name="skills" required>
-        </div>
+    <!-- Row 2: Email and Phone -->
+    <div class="form-row">
+      <div class="form-group">
+        <label for="email">Candidate Email</label>
+        <input type="email" name="email" required>
       </div>
 
-      <div class="form-row">
-        <div class="form-group full-width">
-          <label for="requisition_id">Select Requisition</label>
-          <select name="requisition_id" required>
-            {% for req in requisitions %}
-              <option value="{{ req.id }}">{{ req.job_title }} ({{ req.department }})</option>
-            {% endfor %}
-          </select>
-        </div>
+      <div class="form-group">
+        <label for="phone">Phone</label>
+        <input type="text" name="phone" required>
+      </div>
+    </div>
+
+    <!-- Row 3: Current Location and Total Experience -->
+    <div class="form-row">
+      <div class="form-group">
+        <label for="current_location">Current Location</label>
+        <input type="text" name="current_location" required>
       </div>
 
-      <div class="form-row">
-        <div class="form-group full-width">
-          <label for="resume">Upload Resume (PDF, DOC)</label>
-          <input type="file" name="resume" accept=".pdf,.doc,.docx" required>
-        </div>
+      <div class="form-group">
+        <label for="total_experience">Total Experience (Years)</label>
+        <input type="number" step="0.1" name="total_experience" required>
+      </div>
+    </div>
+
+    <!-- Row 4: Current CTC and Expected CTC -->
+    <div class="form-row">
+      <div class="form-group">
+        <label for="current_ctc">Current CTC</label>
+        <input type="number" step="0.01" name="current_ctc" required>
       </div>
 
-      <div style="display: flex; justify-content: flex-end;">
-        <button type="submit" class="fancy-btn">Submit</button>
+      <div class="form-group">
+        <label for="expected_ctc">Expected CTC</label>
+        <input type="number" step="0.01" name="expected_ctc" required>
+      </div>
+    </div>
+
+    <!-- Row 5: Organization and Designation -->
+    <div class="form-row">
+      <div class="form-group">
+        <label for="current_organization">Current Organization</label>
+        <input type="text" name="current_organization" required>
       </div>
 
-    </form>
-  </div>
+      <div class="form-group">
+        <label for="current_designation">Current Designation</label>
+        <input type="text" name="current_designation" required>
+      </div>
+    </div>
+
+    <!-- Row 6: Skills -->
+    <div class="form-row">
+      <div class="form-group full-width">
+        <label for="skills">Skills</label>
+        <input type="text" name="skills" required>
+      </div>
+    </div>
+
+    <!-- Row 7: Requisition Dropdown -->
+    <div class="form-row">
+      <div class="form-group full-width">
+        <label for="requisition_id">Select Requisition</label>
+        <select name="requisition_id" required>
+          {% for req in requisitions %}
+            <option value="{{ req.id }}">{{ req.job_title }} ({{ req.department }})</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Row 8: Resume Upload -->
+    <div class="form-row">
+      <div class="form-group full-width">
+        <label for="resume">Upload Resume (PDF, DOC)</label>
+        <input type="file" name="resume" accept=".pdf,.doc,.docx" required>
+      </div>
+    </div>
+
+    <!-- Submit Button -->
+    <div style="display: flex; justify-content: flex-end;">
+      <button type="submit" class="fancy-btn">Submit</button>
+    </div>
+
+  </form>
+</div>
+
 
 {% endblock %}

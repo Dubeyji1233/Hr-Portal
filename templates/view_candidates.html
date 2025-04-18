@@ -55,10 +55,9 @@
 <table id="candidateTable" class="display table table-bordered table-striped">
     <thead>
         <tr>
-            <th>Name</th>
+            <th>Full Name</th>
             <th>Email</th>
             <th>Phone</th>
-            <th>Shortlisted By</th>
             <th>Shortlisted On</th>
             <th>Requisition Title</th>
             <th>View Details</th>
@@ -71,10 +70,9 @@
     <tbody>
         {% for candidate in candidates %}
         <tr>
-            <td>{{ candidate.name }}</td>
+            <td>{{ candidate.full_name }}</td>
             <td>{{ candidate.email }}</td>
             <td>{{ candidate.phone }}</td>
-            <td class="shortlisted_by_{{ candidate.id }}">{{ candidate.shortlisted_by or 'N/A' }}</td>
             <td class="shortlisted_on_{{ candidate.id }}">{{ candidate.shortlisted_on or 'N/A' }}</td>
             <td>{{ candidate.requisition_title }}</td>
             <td>

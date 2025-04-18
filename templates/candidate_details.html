@@ -4,12 +4,18 @@
     <h3>Candidate Details</h3>
     <hr>
 
-    <p><strong>Name:</strong> {{ candidate.name }}</p>
+    <p><strong>Name:</strong> {{ candidate.first_name }} {{ candidate.last_name }}</p>
     <p><strong>Email:</strong> {{ candidate.email }}</p>
     <p><strong>Phone:</strong> {{ candidate.phone }}</p>
+    <p><strong>Current Location:</strong> {{ candidate.current_location }}</p>
+    <p><strong>Total Experience:</strong> {{ candidate.total_experience }} years</p>
+    <p><strong>Current CTC:</strong> ₹{{ candidate.current_ctc }}</p>
+    <p><strong>Expected CTC:</strong> ₹{{ candidate.expected_ctc }}</p>
+    <p><strong>Current Organization:</strong> {{ candidate.current_organization }}</p>
+    <p><strong>Current Designation:</strong> {{ candidate.current_designation }}</p>
+    <p><strong>Skills:</strong> {{ candidate.skills }}</p>
     <p><strong>Status:</strong> {{ candidate.status }}</p>
     <p><strong>Job Title:</strong> {{ candidate.job_title }}</p>
-    <p><strong>Department:</strong> {{ candidate.department }}</p>
     <p><strong>Resume:</strong>
         {% if candidate.resume_url %}
             <a href="{{ candidate.resume_url }}" target="_blank">View Resume</a>
@@ -17,7 +23,6 @@
             Not uploaded
         {% endif %}
     </p>
-
     <a href="{{ url_for('view_candidates') }}" class="btn btn-secondary mt-3">Back</a>
 </div>
 {% endblock %}

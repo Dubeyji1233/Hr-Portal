@@ -41,13 +41,20 @@ CREATE TABLE requisitions (
 
 CREATE TABLE candidates (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100),
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
     email VARCHAR(100),
     phone VARCHAR(15),
-    skills text,
+    current_location VARCHAR(100),
+    total_experience DECIMAL(4,1),
+    current_ctc DECIMAL(10,2),
+    expected_ctc DECIMAL(10,2),
+    current_organization VARCHAR(150),
+    current_designation VARCHAR(150),
+    skills TEXT,
     resume BLOB,
     requisition_id INT,
-    submitted_by varchar(100),
+    submitted_by VARCHAR(100),
     shortlisted_by INT,
     shortlisted_on DATETIME,
     is_shortlisted BOOLEAN DEFAULT FALSE,
@@ -66,3 +73,8 @@ CREATE TABLE interview_schedule (
     UNIQUE(candidate_id, level),
     FOREIGN KEY (candidate_id) REFERENCES candidates(id)
 );
+
+ALTER TABLE interview_hierarchy
+ADD COLUMN interviewer_department VARCHAR(100),
+ADD COLUMN interviewer_involvement INT;
+
