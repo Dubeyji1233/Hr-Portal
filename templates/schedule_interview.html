@@ -24,32 +24,89 @@
         border-radius: 10px;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     }
+
+    .status-tag {
+        padding: 2px 8px;
+        border-radius: 5px;
+        font-size: 0.9em;
+    }
+
+    .pending {
+        background-color: #ffc107;
+        color: #212529;
+    }
+
+    .completed {
+        background-color: #28a745;
+        color: white;
+    }
+
+    .not-scheduled {
+        background-color: #6c757d;
+        color: white;
+    }
 </style>
 
 <div class="container">
     <h2>Schedule Interview</h2>
 
-    <form action="/schedule_interview/{{ candidate_id }}" method="POST">
+    <!-- Interview Status -->
+    {% for item in hierarchy %}
         <div class="mb-3">
-            <label for="level" class="form-label">Select Interview Level</label>
-            <select class="form-select" id="level" name="level" required>
-                {% for item in hierarchy %}
-                    <option value="{{ item.level }}">Level {{ item.level }} - {{ item.interviewer_name }}</option>
-                {% endfor %}
-            </select>
+            <strong>Level {{ item.level }} - {{ item.interviewer_name }}</strong><br>
+            {% if item.level in scheduled %}
+                📅 Scheduled on: {{ scheduled[item.level].interview_datetime }}<br>
+                <span class="status-tag {{ scheduled[item.level].status }}">{{ scheduled[item.level].status|capitalize }}</span>
+                {% if scheduled[item.level].status == 'pending' %}
+                    <a href="/mark_completed/{{ candidate_id }}/{{ item.level }}" class="btn btn-success btn-sm ms-2">Mark as Completed</a>
+                    <a href="/edit_schedule/{{ candidate_id }}/{{ item.level }}" class="btn btn-warning btn-sm ms-1">Edit</a>
+                {% endif %}
+            {% else %}
+                <span class="status-tag not-scheduled">Not Scheduled</span>
+            {% endif %}
         </div>
+        <hr>
+    {% endfor %}
 
-        <div class="mb-3">
-            <label for="interview_datetime" class="form-label">Interview Date & Time</label>
-            <input type="datetime-local" class="form-control" id="interview_datetime" name="interview_datetime" required>
+    <!-- Determine the next schedulable level -->
+    {% set ns = namespace(next_level=None) %}
+    {% for item in hierarchy %}
+        {% set level = item.level %}
+        {% if ns.next_level is none %}
+            {% if level == 1 or (level - 1) in scheduled and scheduled[level - 1].status == 'completed' %}
+                {% if level not in scheduled %}
+                    {% set ns.next_level = level %}
+                {% endif %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+
+    <!-- Schedule Form -->
+    {% if ns.next_level %}
+        <form action="/schedule_interview/{{ candidate_id }}" method="POST">
+            <input type="hidden" name="level" value="{{ ns.next_level }}">
+            <div class="mb-3">
+                <label class="form-label">Interview Level</label>
+                <input class="form-control" value="Level {{ ns.next_level }}" disabled>
+            </div>
+
+            <div class="mb-3">
+                <label for="interview_datetime" class="form-label">Interview Date & Time</label>
+                <input type="datetime-local" class="form-control" id="interview_datetime" name="interview_datetime" required>
+            </div>
+
+            <div class="text-center">
+                <button type="submit" class="btn btn-primary">Schedule Level {{ ns.next_level }}</button>
+            </div>
+        </form>
+    {% else %}
+        <div class="alert alert-info text-center mt-4">
+            All interviews are either scheduled or completed.
         </div>
+    {% endif %}
 
-        <div class="text-center">
-            <button type="submit" class="btn btn-primary">Schedule</button>
-        </div>
-    </form>
-
-    {% if scheduled %}
+    <!-- Success Message -->
+    {% if scheduled and scheduled.level %}
         <hr>
         <h5 class="text-success">Interview scheduled successfully for Level {{ scheduled.level }}!</h5>
         <p>Interviewer: {{ scheduled.interviewer_name }}<br>

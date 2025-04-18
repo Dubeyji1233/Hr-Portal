@@ -1,3 +1,4 @@
+
 from flask import send_file,Flask, flash,render_template, request, redirect, url_for, session, flash,jsonify
 import pymysql
 import msal
@@ -133,7 +134,7 @@ def auth_response():
                     }
                 else:
                     # New user — assign default role "HR"
-                    default_role = "hr"
+                    default_role = "admin"
                     cursor.execute(
                         "INSERT INTO users (email, name, azure_oid, role) VALUES (%s, %s, %s, %s)",
                         (email, name, oid, default_role)
@@ -570,14 +571,31 @@ def schedule_interview(candidate_id):
     connection = get_db_connection()
     cursor = connection.cursor(pymysql.cursors.DictCursor)
 
-    if request.method == 'POST':
-        level = request.form['level']
-        interview_datetime_str = request.form['interview_datetime']
+    # Fetch scheduled interviews with status
+    cursor.execute("""
+        SELECT level, interview_datetime, status FROM interview_schedule
+        WHERE candidate_id = %s
+    """, (candidate_id,))
+    scheduled_interviews = {
+        row['level']: {
+            'interview_datetime': row['interview_datetime'],
+            'status': row['status']
+        } for row in cursor.fetchall()
+    }
 
-        # Convert to datetime object
+    if request.method == 'POST':
+        level = int(request.form['level'])
+        interview_datetime_str = request.form['interview_datetime']
         interview_datetime = datetime.strptime(interview_datetime_str, '%Y-%m-%dT%H:%M')
 
-        # Get hierarchy info
+        # 🧠 Check if previous level is completed (except for level 1)
+        if level > 1:
+            previous = scheduled_interviews.get(level - 1)
+            if not previous or previous['status'] != 'completed':
+                flash(f"You must complete Level {level - 1} before scheduling Level {level}.", "danger")
+                return redirect(request.url)
+
+        # Fetch interviewer info from hierarchy
         cursor.execute("""
             SELECT ih.*, c.email as candidate_email, c.name as candidate_name
             FROM interview_hierarchy ih
@@ -590,23 +608,22 @@ def schedule_interview(candidate_id):
             flash('Invalid level or candidate', 'danger')
             return redirect(request.url)
 
-        # Save to interview_schedule table
+        # Insert or update interview_schedule
         cursor.execute("""
-            INSERT INTO interview_schedule (candidate_id, level, interview_datetime, interviewer_name, interviewer_email)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO interview_schedule (candidate_id, level, interview_datetime, interviewer_name, interviewer_email, status)
+            VALUES (%s, %s, %s, %s, %s, 'pending')
             ON DUPLICATE KEY UPDATE interview_datetime = VALUES(interview_datetime)
         """, (candidate_id, level, interview_datetime_str, result['interviewer_name'], result['interviewer_email']))
         connection.commit()
 
-        # Get access token (example – you should retrieve it securely)
-        access_token = session.get('access_token')  # Replace with your token logic
-
+        # Teams Invite
+        access_token = session.get('access_token')
         try:
             send_teams_invite(
                 interviewer_email=result['interviewer_email'],
                 candidate_email=result['candidate_email'],
                 start_time=interview_datetime,
-                duration_minutes=30,  # or customize based on form input
+                duration_minutes=30,
                 subject=f"Interview for Candidate {result['candidate_name']} - Level {level}",
                 location="Microsoft Teams Meeting",
                 description="This is a scheduled interview. Please be on time.",
@@ -616,14 +633,18 @@ def schedule_interview(candidate_id):
             print("Error sending invite:", e)
             flash("Interview scheduled, but failed to send Teams invite.", "warning")
 
-        return render_template('schedule_interview.html', candidate_id=candidate_id, hierarchy=get_hierarchy(candidate_id), scheduled={
-            'level': level,
-            'interviewer_name': result['interviewer_name'],
-            'time': interview_datetime_str
-        }, user=session['user'])
+        flash(f"Interview for Level {level} scheduled successfully.", "success")
+        return redirect(url_for('schedule_interview', candidate_id=candidate_id))
 
-    # GET method
-    return render_template('schedule_interview.html', candidate_id=candidate_id, hierarchy=get_hierarchy(candidate_id), scheduled=None, user=session['user'])
+    # GET request
+    return render_template(
+        'schedule_interview.html',
+        candidate_id=candidate_id,
+        hierarchy=get_hierarchy(candidate_id),
+        scheduled=scheduled_interviews,
+        user=session['user']
+    )
+
 
 
 
@@ -733,6 +754,20 @@ def logout():
             "https://login.microsoftonline.com/common/oauth2/v2.0/logout"
             f"?post_logout_redirect_uri={url_for('login', _external=True)}"
         )
+
+@app.route('/mark_completed/<int:candidate_id>/<int:level>', methods=['GET'])
+def mark_completed(candidate_id, level):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    cursor.execute("""
+        UPDATE interview_schedule
+        SET status = 'completed'
+        WHERE candidate_id = %s AND level = %s
+    """, (candidate_id, level))
+    connection.commit()
+    flash(f'Level {level} marked as completed!', 'success')
+    return redirect(url_for('schedule_interview', candidate_id=candidate_id))
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5005)
