@@ -1,199 +1,199 @@
-{% extends "home.html" %}
+<!--{% extends "home.html" %}-->
 
-{% block head %}
-  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<!--{% block head %}-->
+<!--  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">-->
+<!--  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">-->
 
-  <style>
-    /* Basic styling */
-    body {
-      background-color: #f1f3f5;
-    }
+<!--  <style>-->
+<!--    /* Basic styling */-->
+<!--    body {-->
+<!--      background-color: #f1f3f5;-->
+<!--    }-->
 
-    h2 {
-      text-align: center;
-      margin-top: 20px;
-      font-weight: bold;
-      color: #333;
-      font-size: 2rem;
-    }
+<!--    h2 {-->
+<!--      text-align: center;-->
+<!--      margin-top: 20px;-->
+<!--      font-weight: bold;-->
+<!--      color: #333;-->
+<!--      font-size: 2rem;-->
+<!--    }-->
 
-    .requisition-form {
-      max-width: 900px;
-      margin: 30px auto;
-      padding: 40px;
-      background: #fff;
-      border-radius: 15px;
-      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-    }
+<!--    .requisition-form {-->
+<!--      max-width: 900px;-->
+<!--      margin: 30px auto;-->
+<!--      padding: 40px;-->
+<!--      background: #fff;-->
+<!--      border-radius: 15px;-->
+<!--      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);-->
+<!--    }-->
 
-    .form-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-    }
+<!--    .form-row {-->
+<!--      display: flex;-->
+<!--      flex-wrap: wrap;-->
+<!--      gap: 20px;-->
+<!--    }-->
 
-    /* Styling for input fields and select */
-    .form-group {
-      flex: 1;
-      min-width: 250px;
-    }
+<!--    /* Styling for input fields and select */-->
+<!--    .form-group {-->
+<!--      flex: 1;-->
+<!--      min-width: 250px;-->
+<!--    }-->
 
-    .form-group select,
-    .form-group input {
-      width: 100%;
-      padding: 12px;
-      margin-bottom: 20px;
-      border-radius: 10px;
-      border: 1px solid #ced4da;
-      font-size: 15px;
-      transition: border-color 0.3s ease;
-    }
+<!--    .form-group select,-->
+<!--    .form-group input {-->
+<!--      width: 100%;-->
+<!--      padding: 12px;-->
+<!--      margin-bottom: 20px;-->
+<!--      border-radius: 10px;-->
+<!--      border: 1px solid #ced4da;-->
+<!--      font-size: 15px;-->
+<!--      transition: border-color 0.3s ease;-->
+<!--    }-->
 
-    .form-group select:focus,
-    .form-group input:focus {
-      border-color: #007bff;
-      box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
-    }
+<!--    .form-group select:focus,-->
+<!--    .form-group input:focus {-->
+<!--      border-color: #007bff;-->
+<!--      box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);-->
+<!--    }-->
 
-    /* Button Styles */
-    .fancy-btn {
-      width: 100%;
-      padding: 12px 20px;
-      background-color: #007bff;
-      color: white;
-      font-size: 16px;
-      font-weight: bold;
-      border-radius: 30px;
-      border: none;
-      transition: background-color 0.3s ease, transform 0.2s ease;
-      cursor: pointer;
-    }
+<!--    /* Button Styles */-->
+<!--    .fancy-btn {-->
+<!--      width: 100%;-->
+<!--      padding: 12px 20px;-->
+<!--      background-color: #007bff;-->
+<!--      color: white;-->
+<!--      font-size: 16px;-->
+<!--      font-weight: bold;-->
+<!--      border-radius: 30px;-->
+<!--      border: none;-->
+<!--      transition: background-color 0.3s ease, transform 0.2s ease;-->
+<!--      cursor: pointer;-->
+<!--    }-->
 
-    .fancy-btn:hover {
-      background-color: #0056b3;
-      transform: translateY(-2px);
-    }
+<!--    .fancy-btn:hover {-->
+<!--      background-color: #0056b3;-->
+<!--      transform: translateY(-2px);-->
+<!--    }-->
 
-    .fancy-btn:active {
-      transform: translateY(2px);
-    }
+<!--    .fancy-btn:active {-->
+<!--      transform: translateY(2px);-->
+<!--    }-->
 
-    /* Flash message popup */
-    .flash-popup {
-      position: fixed;
-      top: 15%;
-      left: 50%;
-      transform: translateX(-50%);
-      background-color: #ffffff;
-      border: 1px solid #dee2e6;
-      border-radius: 10px;
-      box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);
-      padding: 20px;
-      z-index: 9999;
-      display: none;
-      min-width: 300px;
-      animation: fadeIn 1s ease-in-out;
-    }
+<!--    /* Flash message popup */-->
+<!--    .flash-popup {-->
+<!--      position: fixed;-->
+<!--      top: 15%;-->
+<!--      left: 50%;-->
+<!--      transform: translateX(-50%);-->
+<!--      background-color: #ffffff;-->
+<!--      border: 1px solid #dee2e6;-->
+<!--      border-radius: 10px;-->
+<!--      box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);-->
+<!--      padding: 20px;-->
+<!--      z-index: 9999;-->
+<!--      display: none;-->
+<!--      min-width: 300px;-->
+<!--      animation: fadeIn 1s ease-in-out;-->
+<!--    }-->
 
-    .flash-message {
-      margin: 0;
-      font-size: 16px;
-    }
+<!--    .flash-message {-->
+<!--      margin: 0;-->
+<!--      font-size: 16px;-->
+<!--    }-->
 
-    .alert-success { border-left: 5px solid #28a745; }
-    .alert-danger { border-left: 5px solid #dc3545; }
-    .alert-info { border-left: 5px solid #17a2b8; }
+<!--    .alert-success { border-left: 5px solid #28a745; }-->
+<!--    .alert-danger { border-left: 5px solid #dc3545; }-->
+<!--    .alert-info { border-left: 5px solid #17a2b8; }-->
 
-    #close-popup {
-      background: none;
-      border: none;
-      font-size: 20px;
-      color: #999;
-      cursor: pointer;
-      position: absolute;
-      top: 8px;
-      right: 12px;
-    }
+<!--    #close-popup {-->
+<!--      background: none;-->
+<!--      border: none;-->
+<!--      font-size: 20px;-->
+<!--      color: #999;-->
+<!--      cursor: pointer;-->
+<!--      position: absolute;-->
+<!--      top: 8px;-->
+<!--      right: 12px;-->
+<!--    }-->
 
-    @keyframes fadeIn {
-      0% { opacity: 0; }
-      100% { opacity: 1; }
-    }
+<!--    @keyframes fadeIn {-->
+<!--      0% { opacity: 0; }-->
+<!--      100% { opacity: 1; }-->
+<!--    }-->
 
-    /* Responsive styling */
-    @media (max-width: 768px) {
-      .form-row {
-        flex-direction: column;
-      }
+<!--    /* Responsive styling */-->
+<!--    @media (max-width: 768px) {-->
+<!--      .form-row {-->
+<!--        flex-direction: column;-->
+<!--      }-->
 
-      .fancy-btn {
-        width: 100%;
-      }
-    }
-  </style>
-{% endblock %}
+<!--      .fancy-btn {-->
+<!--        width: 100%;-->
+<!--      }-->
+<!--    }-->
+<!--  </style>-->
+<!--{% endblock %}-->
 
-{% block content %}
-  <h2>Assign Requisition</h2>
+<!--{% block content %}-->
+<!--  <h2>Assign Requisition</h2>-->
 
-<!--  {% with messages = get_flashed_messages(with_categories=true) %}-->
-<!--    {% if messages %}-->
-<!--      <div class="flash-popup" id="flash-popup">-->
-<!--        {% for category, message in messages %}-->
-<!--          <div class="flash-message alert alert-{{ category }}">-->
-<!--            {{ message }}-->
-<!--            <button id="close-popup" onclick="closePopup()">×</button>-->
-<!--          </div>-->
-<!--        {% endfor %}-->
+<!--&lt;!&ndash;  {% with messages = get_flashed_messages(with_categories=true) %}&ndash;&gt;-->
+<!--&lt;!&ndash;    {% if messages %}&ndash;&gt;-->
+<!--&lt;!&ndash;      <div class="flash-popup" id="flash-popup">&ndash;&gt;-->
+<!--&lt;!&ndash;        {% for category, message in messages %}&ndash;&gt;-->
+<!--&lt;!&ndash;          <div class="flash-message alert alert-{{ category }}">&ndash;&gt;-->
+<!--&lt;!&ndash;            {{ message }}&ndash;&gt;-->
+<!--&lt;!&ndash;            <button id="close-popup" onclick="closePopup()">×</button>&ndash;&gt;-->
+<!--&lt;!&ndash;          </div>&ndash;&gt;-->
+<!--&lt;!&ndash;        {% endfor %}&ndash;&gt;-->
+<!--&lt;!&ndash;      </div>&ndash;&gt;-->
+<!--&lt;!&ndash;    {% endif %}&ndash;&gt;-->
+<!--&lt;!&ndash;  {% endwith %}&ndash;&gt;-->
+
+<!--  <div class="requisition-form">-->
+<!--    <form method="POST">-->
+<!--      <div class="form-row">-->
+<!--        <div class="form-group">-->
+<!--          <label for="requisition_id">Select Requisition:</label>-->
+<!--          <select name="requisition_id" required>-->
+<!--            <option value="" disabled selected>Select a Requisition</option>-->
+<!--            {% for r in requisitions %}-->
+<!--              <option value="{{ r.id }}">{{ r.job_title }} - {{ r.department }} (Created by: {{ r.created_by }})</option>-->
+<!--            {% endfor %}-->
+<!--          </select>-->
+<!--        </div>-->
+
+<!--        <div class="form-group">-->
+<!--          <label for="assigned_to">Assign to HR:</label>-->
+<!--          <select name="assigned_to" required>-->
+<!--            <option value="" disabled selected>Select HR</option>-->
+<!--            {% for hr in hr_users %}-->
+<!--              <option value="{{ hr.email }}">{{ hr.name }} ({{ hr.email }})</option>-->
+<!--            {% endfor %}-->
+<!--          </select>-->
+<!--        </div>-->
 <!--      </div>-->
-<!--    {% endif %}-->
-<!--  {% endwith %}-->
 
-  <div class="requisition-form">
-    <form method="POST">
-      <div class="form-row">
-        <div class="form-group">
-          <label for="requisition_id">Select Requisition:</label>
-          <select name="requisition_id" required>
-            <option value="" disabled selected>Select a Requisition</option>
-            {% for r in requisitions %}
-              <option value="{{ r.id }}">{{ r.job_title }} - {{ r.department }} (Created by: {{ r.created_by }})</option>
-            {% endfor %}
-          </select>
-        </div>
+<!--      <div style="text-align: center; margin-top: 20px;">-->
+<!--        <button type="submit" class="fancy-btn">Assign Requisition</button>-->
+<!--      </div>-->
 
-        <div class="form-group">
-          <label for="assigned_to">Assign to HR:</label>
-          <select name="assigned_to" required>
-            <option value="" disabled selected>Select HR</option>
-            {% for hr in hr_users %}
-              <option value="{{ hr.email }}">{{ hr.name }} ({{ hr.email }})</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
+<!--    </form>-->
+<!--  </div>-->
+<!--{% endblock %}-->
 
-      <div style="text-align: center; margin-top: 20px;">
-        <button type="submit" class="fancy-btn">Assign Requisition</button>
-      </div>
+<!--{% block scripts %}-->
+<!--  <script>-->
+<!--    function closePopup() {-->
+<!--      var popup = document.getElementById('flash-popup');-->
+<!--      if (popup) popup.style.display = 'none';-->
+<!--    }-->
 
-    </form>
-  </div>
-{% endblock %}
+<!--    window.addEventListener("DOMContentLoaded", function () {-->
+<!--      var popup = document.getElementById('flash-popup');-->
+<!--      if (popup) popup.style.display = 'block';-->
 
-{% block scripts %}
-  <script>
-    function closePopup() {
-      var popup = document.getElementById('flash-popup');
-      if (popup) popup.style.display = 'none';
-    }
-
-    window.addEventListener("DOMContentLoaded", function () {
-      var popup = document.getElementById('flash-popup');
-      if (popup) popup.style.display = 'block';
-
-      setTimeout(closePopup, 5000);
-    });
-  </script>
-{% endblock %}
+<!--      setTimeout(closePopup, 5000);-->
+<!--    });-->
+<!--  </script>-->
+<!--{% endblock %}-->

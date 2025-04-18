@@ -209,6 +209,22 @@
           <label>Email</label>
           <input type="email" name="interviewer_email_${level}" required>
         </div>
+        <div class="form-group">
+          <label>% Involvement</label>
+          <input type="number" name="interviewer_involvement_${level}" min="0" max="100" required>
+        </div>
+        <div class="form-group">
+          <label>Department</label>
+          <select name="interviewer_department_${level}" required>
+            <option value="">Select Department</option>
+            <option value="HR">HR</option>
+            <option value="Engineering">Engineering</option>
+            <option value="Sales">Sales</option>
+            <option value="Marketing">Marketing</option>
+            <option value="Finance">Finance</option>
+            <!-- Add more departments if needed -->
+          </select>
+        </div>
       </div>
     `;
 
@@ -226,11 +242,13 @@
   function recalculateLevels() {
     const blocks = document.querySelectorAll('.level-block');
     let newLevel = 0;
-    blocks.forEach((block, index) => {
+    blocks.forEach((block) => {
       newLevel++;
       block.querySelector('strong').textContent = `Level ${newLevel}`;
       block.querySelector('[name^="interviewer_name_"]').setAttribute('name', `interviewer_name_${newLevel}`);
       block.querySelector('[name^="interviewer_email_"]').setAttribute('name', `interviewer_email_${newLevel}`);
+      block.querySelector('[name^="interviewer_involvement_"]').setAttribute('name', `interviewer_involvement_${newLevel}`);
+      block.querySelector('[name^="interviewer_department_"]').setAttribute('name', `interviewer_department_${newLevel}`);
       block.setAttribute('id', `level_${newLevel}`);
       block.querySelector('.remove-btn').setAttribute('onclick', `removeLevel(${newLevel})`);
     });
