@@ -58,9 +58,10 @@
             <tr>
                 <th>ID</th>
                 <th>Position</th>
-                <th>Department</th>
+                <th>Assigned To</th>
                 <th>Requested By</th>
                 <th>Date</th>
+                <th>View Details</th>
                 <th>Status</th> <!-- Optional column -->
             </tr>
         </thead>
@@ -69,9 +70,14 @@
             <tr>
                 <td>{{ req.id }}</td>
                 <td>{{ req.job_title }}</td>
-                <td>{{ req.department }}</td>
+                <td>{{ req.assigned_to }}</td>
                 <td>{{ req.created_by }}</td>
                 <td>{{ req.created_at.strftime('%Y-%m-%d') }}</td>
+                <td>
+                    <a href="{{ url_for('view_requisition_details', requisition_id=req.id) }}" class="btn btn-primary btn-sm">
+                        View Details
+                    </a>
+                </td>
                 <td>{{ req.status }}</td> <!-- Can remove this if not used -->
             </tr>
             {% endfor %}

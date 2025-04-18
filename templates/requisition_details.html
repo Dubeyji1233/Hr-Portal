@@ -1,0 +1,38 @@
+{% extends "home.html" %}
+{% block content %}
+
+<div class="mt-4">
+
+    {% if requisition.assigned_to %}
+        <div class="alert alert-info">
+            <strong>Assigned to:</strong> {{ requisition.assigned_to_name }} ({{ requisition.assigned_to }})
+        </div>
+    {% else %}
+        <form method="POST">
+            <div class="form-group">
+                <label for="assigned_to">Select HR:</label>
+                <select class="form-control" name="assigned_to" required>
+                    <option value="" disabled selected>Select HR</option>
+                    {% for hr in hr_users %}
+                        <option value="{{ hr.email }}">{{ hr.name }} ({{ hr.email }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-success mt-2">Assign</button>
+        </form>
+    {% endif %}
+</div>
+
+<div class="container mt-4">
+    <h3>Requisition Details</h3>
+    <table class="table table-bordered">
+        {% for key, value in requisition.items() %}
+        <tr>
+            <th>{{ key.replace('_', ' ').capitalize() }}</th>
+            <td>{{ value }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <a href="{{ url_for('view_requisitions') }}" class="btn btn-secondary">Back</a>
+</div>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "home.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h3>Candidate Details</h3>
+    <hr>
+
+    <p><strong>Name:</strong> {{ candidate.name }}</p>
+    <p><strong>Email:</strong> {{ candidate.email }}</p>
+    <p><strong>Phone:</strong> {{ candidate.phone }}</p>
+    <p><strong>Status:</strong> {{ candidate.status }}</p>
+    <p><strong>Job Title:</strong> {{ candidate.job_title }}</p>
+    <p><strong>Department:</strong> {{ candidate.department }}</p>
+    <p><strong>Resume:</strong>
+        {% if candidate.resume_url %}
+            <a href="{{ candidate.resume_url }}" target="_blank">View Resume</a>
+        {% else %}
+            Not uploaded
+        {% endif %}
+    </p>
+
+    <a href="{{ url_for('view_candidates') }}" class="btn btn-secondary mt-3">Back</a>
+</div>
+{% endblock %}

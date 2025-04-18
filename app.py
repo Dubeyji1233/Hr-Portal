@@ -165,10 +165,10 @@ def home():
     allowed_pages = {
         'manager': ['dashboard', 'requisition', 'repository', 'view_requisitions'],
         'hr': ['dashboard', 'repository', 'view_requisitions'],
-        'hr lead': ['dashboard', 'repository', 'view_requisitions','assign_requisition' ]
+        'hr lead': ['dashboard', 'repository', 'view_requisitions']
     }
 
-    all_pages = ['dashboard', 'requisition', 'repository', 'usermanagement', 'view_requisitions','assign_requisition']
+    all_pages = ['dashboard', 'requisition', 'repository', 'usermanagement', 'view_requisitions']
     allowed = all_pages if user_role == 'admin' else allowed_pages.get(user_role, [])
 
     if page not in allowed:
@@ -280,59 +280,59 @@ Regards,
     else:
         return False, f"Failed to send mail: {response.text}"
 # ------------------------------------------------------------------------------------#
-@app.route('/assign_requisition', methods=['GET', 'POST'])
-def assign_requisition():
-
-    if 'user' not in session or session['user']['role'] not in ['hr lead', 'admin']:
-        return redirect(url_for('home'))
-
-    user = session.get('user')
-    conn = get_db_connection()
-    requisitions = []
-    hr_users = []
-    success_message = None
-
-    try:
-        with conn.cursor() as cursor:
-
-            cursor.execute("""
-                SELECT r.id, r.job_title, r.department, u.name AS created_by
-                FROM requisitions r
-                JOIN users u ON r.created_by = u.email
-                WHERE r.assigned_to IS NULL
-                ORDER BY r.created_at DESC
-            """)
-            requisitions = cursor.fetchall()
-
-
-            cursor.execute("SELECT id, name, email FROM users WHERE role = 'hr'")
-            hr_users = cursor.fetchall()
-
-
-            # Handle form submission (POST)
-            if request.method == 'POST':
-                requisition_id = request.form['requisition_id']
-                assigned_to = request.form['assigned_to']
-
-                # Update the requisition assignment
-                cursor.execute("""
-                    UPDATE requisitions
-                    SET assigned_to = %s
-                    WHERE id = %s
-                """, (assigned_to, requisition_id))
-                conn.commit()
-
-                flash("Requisition successfully assigned!", "success")
-                # Redirect to the same page to refresh and update the dropdown
-                return redirect(url_for('assign_requisition'))
-
-    except Exception as e:
-        print("Error:", str(e))
-
-    finally:
-        conn.close()
-
-    return render_template('assign_requisition.html', requisitions=requisitions, hr_users=hr_users,  user=user)
+# @app.route('/assign_requisition', methods=['GET', 'POST'])
+# def assign_requisition():
+#
+#     if 'user' not in session or session['user']['role'] not in ['hr lead', 'admin']:
+#         return redirect(url_for('home'))
+#
+#     user = session.get('user')
+#     conn = get_db_connection()
+#     requisitions = []
+#     hr_users = []
+#     success_message = None
+#
+#     try:
+#         with conn.cursor() as cursor:
+#
+#             cursor.execute("""
+#                 SELECT r.id, r.job_title, r.department, u.name AS created_by
+#                 FROM requisitions r
+#                 JOIN users u ON r.created_by = u.email
+#                 WHERE r.assigned_to IS NULL
+#                 ORDER BY r.created_at DESC
+#             """)
+#             requisitions = cursor.fetchall()
+#
+#
+#             cursor.execute("SELECT id, name, email FROM users WHERE role = 'hr'")
+#             hr_users = cursor.fetchall()
+#
+#
+#             # Handle form submission (POST)
+#             if request.method == 'POST':
+#                 requisition_id = request.form['requisition_id']
+#                 assigned_to = request.form['assigned_to']
+#
+#                 # Update the requisition assignment
+#                 cursor.execute("""
+#                     UPDATE requisitions
+#                     SET assigned_to = %s
+#                     WHERE id = %s
+#                 """, (assigned_to, requisition_id))
+#                 conn.commit()
+#
+#                 flash("Requisition successfully assigned!", "success")
+#                 # Redirect to the same page to refresh and update the dropdown
+#                 return redirect(url_for('assign_requisition'))
+#
+#     except Exception as e:
+#         print("Error:", str(e))
+#
+#     finally:
+#         conn.close()
+#
+#     return render_template('assign_requisition.html', requisitions=requisitions, hr_users=hr_users,  user=user)
 # ------------------------------------------------------------------------------------#
 
 @app.route('/view_requisitions')
@@ -349,8 +349,7 @@ def view_requisitions():
             if user['role'] in ['admin', 'hr lead']:
                 # Admins and HR Leads see all requisitions
                 cursor.execute("""
-                    SELECT r.id, r.job_title, r.department, r.created_at, r.created_by,
-                           r.assigned_to, u1.name AS created_by_name, u2.name AS assigned_to_name
+                    SELECT r.*, u1.name AS created_by_name, u2.name AS assigned_to_name
                     FROM requisitions r
                     LEFT JOIN users u1 ON r.created_by = u1.email
                     LEFT JOIN users u2 ON r.assigned_to = u2.email
@@ -377,6 +376,61 @@ def view_requisitions():
         conn.close()
 
     return render_template('view_requisitions.html', requisitions=requisitions, user=user )
+
+# ------------------------------------------------------------------------------------#
+
+
+@app.route('/requisition/<int:requisition_id>', methods=['GET', 'POST'])
+def view_requisition_details(requisition_id):
+    if 'user' not in session:
+        return redirect(url_for('home'))
+
+    user = session['user']
+    conn = get_db_connection()
+    requisition = None
+    hr_users = []
+
+    try:
+        with conn.cursor() as cursor:
+            # Fetch the requisition
+            cursor.execute("""
+                SELECT r.*, u1.name AS created_by_name, u2.name AS assigned_to_name
+                FROM requisitions r
+                LEFT JOIN users u1 ON r.created_by = u1.email
+                LEFT JOIN users u2 ON r.assigned_to = u2.email
+                WHERE r.id = %s
+            """, (requisition_id,))
+            requisition = cursor.fetchone()
+
+            if not requisition:
+                flash("Requisition not found", "warning")
+                return redirect(url_for('view_requisitions'))
+
+            # Only if user is admin or hr lead, fetch HR list
+            if user['role'] in ['admin', 'hr lead']:
+                cursor.execute("SELECT name, email FROM users WHERE role = 'hr'")
+                hr_users = cursor.fetchall()
+
+            # Handle assignment POST
+            if request.method == 'POST' and user['role'] in ['admin', 'hr lead']:
+                assigned_to = request.form['assigned_to']
+                cursor.execute("""
+                    UPDATE requisitions
+                    SET assigned_to = %s
+                    WHERE id = %s
+                """, (assigned_to, requisition_id))
+                conn.commit()
+                flash("Requisition successfully assigned!", "success")
+                return redirect(url_for('view_requisition_details', requisition_id=requisition_id))
+
+    except Exception as e:
+        print("Error fetching requisition details:", e)
+        flash("Error loading requisition details", "danger")
+    finally:
+        conn.close()
+
+    return render_template('requisition_details.html', requisition=requisition, hr_users=hr_users, user=user)
+
 
 # ------------------------------------------------------------------------------------#
 @app.route('/user_management')
@@ -560,6 +614,40 @@ def shortlist_candidate(candidate_id):
         'shortlisted_by': name,
         'shortlisted_on': now.strftime('%Y-%m-%d %H:%M')
     })
+
+
+@app.route('/candidate/<int:id>')
+def candidate_detail(id):
+    if 'user' not in session:
+        return redirect(url_for('home'))
+
+    user = session['user']
+    conn = get_db_connection()
+    candidate = None
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT c.*, r.job_title, r.department
+                FROM candidates c
+                LEFT JOIN requisitions r ON c.requisition_id = r.id
+                WHERE c.id = %s
+            """, (id,))
+            candidate = cursor.fetchone()
+
+            if not candidate:
+                flash("Candidate not found", "warning")
+                return redirect(url_for('view_candidates'))
+
+    except Exception as e:
+        print("Error fetching candidate detail:", e)
+        flash("Error loading candidate details", "danger")
+    finally:
+        conn.close()
+
+    return render_template('candidate_details.html', candidate=candidate, user=user)
+
+
 
 # ------------------------------------------------------------------------------------#
 @app.route('/schedule_interview/<int:candidate_id>', methods=['GET', 'POST'])

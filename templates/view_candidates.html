@@ -61,9 +61,11 @@
             <th>Shortlisted By</th>
             <th>Shortlisted On</th>
             <th>Requisition Title</th>
+            <th>View Details</th>
             <th>Resume</th>
             <th>Action</th>
             <th>Schedule Interview</th>
+
         </tr>
     </thead>
     <tbody>
@@ -75,6 +77,11 @@
             <td class="shortlisted_by_{{ candidate.id }}">{{ candidate.shortlisted_by or 'N/A' }}</td>
             <td class="shortlisted_on_{{ candidate.id }}">{{ candidate.shortlisted_on or 'N/A' }}</td>
             <td>{{ candidate.requisition_title }}</td>
+            <td>
+                <a href="{{ url_for('candidate_detail', id=candidate.id) }}" class="btn btn-primary btn-sm">
+                    View
+                </a>
+            </td>
             <td>
                 <a href="{{ url_for('download_resume', candidate_id=candidate.id) }}" class="btn btn-link btn-sm">Download</a>
             </td>
