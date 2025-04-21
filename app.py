@@ -624,10 +624,14 @@ def candidate_detail(id):
 
     user = session['user']
     conn = get_db_connection()
+
     candidate = None
+    ratings_by_level = {}
+    next_pending_level = None
 
     try:
         with conn.cursor() as cursor:
+            # Get candidate + requisition info
             cursor.execute("""
                 SELECT c.*, r.job_title, r.department
                 FROM candidates c
@@ -640,13 +644,93 @@ def candidate_detail(id):
                 flash("Candidate not found", "warning")
                 return redirect(url_for('view_candidates'))
 
+            requisition_id = candidate['requisition_id']
+
+            # Get interviewers and their rating (if exists)
+            cursor.execute("""
+                SELECT ih.id AS interviewer_id, ih.level, ih.interviewer_name, ih.interviewer_email,
+                       COALESCE(rt.status, 'pending') AS status, rt.id AS rating_id
+                FROM interview_hierarchy ih
+                LEFT JOIN ratings rt 
+                  ON rt.interviewer_id = ih.id AND rt.candidate_id = %s
+                WHERE ih.requisition_id = %s
+                ORDER BY ih.level ASC
+            """, (id, requisition_id))
+
+            interviews = cursor.fetchall()
+
+            for row in interviews:
+                level = row['level']
+                ratings_by_level[level] = row
+                if next_pending_level is None and row['status'] == 'pending':
+                    next_pending_level = level
+
     except Exception as e:
-        print("Error fetching candidate detail:", e)
-        flash("Error loading candidate details", "danger")
+        print("Error:", e)
+        flash("Something went wrong.", "danger")
     finally:
         conn.close()
 
-    return render_template('candidate_details.html', candidate=candidate, user=user)
+    return render_template('candidate_details.html',
+                           candidate=candidate,
+                           ratings_by_level=ratings_by_level,
+                           next_pending_level=next_pending_level,
+                           user=user)
+
+@app.route('/submit_rating/<int:candidate_id>/<int:level>', methods=['POST'])
+def submit_rating(candidate_id, level):
+    user = session.get('user')
+    remarks = request.form.get('remarks')
+    
+    # Extract rating values from the form
+    communication_skills = request.form.get('communication_skills')
+    technical_skills = request.form.get('technical_skills')
+    learning_ability = request.form.get('learning_ability')
+    problem_solving = request.form.get('problem_solving')
+    cultural_fitment = request.form.get('cultural_fitment')
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Find interviewer and requisition ID
+            cursor.execute("""
+                SELECT ih.id AS interviewer_id, ih.requisition_id
+                FROM interview_hierarchy ih
+                JOIN candidates c ON ih.requisition_id = c.requisition_id
+                WHERE c.id = %s AND ih.level = %s
+            """, (candidate_id, level))
+            result = cursor.fetchone()
+
+            if result:
+                interviewer_id = result['interviewer_id']
+                requisition_id = result['requisition_id']
+
+                # Insert into ratings table
+                cursor.execute("""
+                    INSERT INTO ratings (
+                        candidate_id, requisition_id, interviewer_id,
+                        communication_skills, technical_skills, learning_ability,
+                        problem_solving, cultural_fitment,
+                        remarks, status
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    candidate_id, requisition_id, interviewer_id,
+                    communication_skills, technical_skills, learning_ability,
+                    problem_solving, cultural_fitment,
+                    remarks, 'submitted'
+                ))
+                conn.commit()
+
+        flash("Rating submitted successfully.", "success")
+    except Exception as e:
+        print("Submit rating error:", e)
+        flash("Error submitting rating.", "danger")
+    finally:
+        conn.close()
+
+    return redirect(url_for('candidate_detail', id=candidate_id))
+
+
 
 
 
@@ -793,7 +877,7 @@ def send_teams_invite(interviewer_email, candidate_email, start_time, duration_m
     }
 
     response = requests.post(
-        f"https://graph.microsoft.com/v1.0/users/{interviewer_email}/events",
+        f"https://graph.microsoft.com/v1.0/users/otpluat@orientindia.net/events",
         headers=headers,
         json=event_payload
     )

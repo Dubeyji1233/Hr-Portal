@@ -1,23 +1,123 @@
 {% extends "home.html" %}
 {% block content %}
-<div class="container mt-4">
-    <h3>Candidate Details</h3>
-    <hr>
-
-    <p><strong>Name:</strong> {{ candidate.name }}</p>
-    <p><strong>Email:</strong> {{ candidate.email }}</p>
-    <p><strong>Phone:</strong> {{ candidate.phone }}</p>
-    <p><strong>Status:</strong> {{ candidate.status }}</p>
-    <p><strong>Job Title:</strong> {{ candidate.job_title }}</p>
-    <p><strong>Department:</strong> {{ candidate.department }}</p>
-    <p><strong>Resume:</strong>
-        {% if candidate.resume_url %}
-            <a href="{{ candidate.resume_url }}" target="_blank">View Resume</a>
-        {% else %}
-            Not uploaded
-        {% endif %}
-    </p>
-
-    <a href="{{ url_for('view_candidates') }}" class="btn btn-secondary mt-3">Back</a>
+<!-- Left Container: Candidate Info -->
+<div class="container">
+    <div class="bg-light p-4 border rounded h-100">
+        <h4>Candidate Details</h4>
+        <hr>
+        <p><strong>Name:</strong> {{ candidate.name }}</p>
+        <p><strong>Email:</strong> {{ candidate.email }}</p>
+        <p><strong>Phone:</strong> {{ candidate.phone }}</p>
+        <p><strong>Status:</strong> {{ candidate.status }}</p>
+        <p><strong>Job Title:</strong> {{ candidate.job_title }}</p>
+        <p><strong>Department:</strong> {{ candidate.department }}</p>
+        <p><strong>Resume:</strong> 
+            {% if candidate.resume_url %}
+                <a href="{{ candidate.resume_url }}" target="_blank">View Resume</a>
+            {% else %}
+                Not uploaded
+            {% endif %}
+        </p>
+        <a href="{{ url_for('view_candidates') }}" class="btn btn-secondary mt-3">Back</a>
+    </div>
 </div>
+
+<!-- Right Container: Ratings -->
+<div class="container mt-4">
+    <div class="bg-white p-4 border rounded h-100">
+        <h4>Interview Ratings</h4>
+
+        <!-- Horizontal Level Boxes -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            {% for level in ratings_by_level.keys() | sort %}
+                {% set rating = ratings_by_level[level] %}
+                <div style="width: 40px; height: 40px; text-align: center; line-height: 40px; border-radius: 5px;
+                            background-color: {% if rating and rating.status == 'submitted' %}rgba(0, 128, 0, 0.3){% else %}#ccc{% endif %};">
+                    L{{ level }}
+                </div>
+            {% endfor %}
+        </div>
+
+        {% for level in ratings_by_level.keys() | sort %}
+            {% set rating = ratings_by_level[level] %}
+            
+            {% if rating and rating.status == 'submitted' %}
+                <div class="mb-3">
+                    <h5>Level {{ level }} Rating (Submitted)</h5>
+                    <p><strong>Interviewer:</strong> {{ rating.interviewer_name }}</p>
+                    <p><strong>Status:</strong> {{ rating.status }}</p>
+                    <p><strong>Remarks:</strong> {{ rating.remarks }}</p>
+                </div>
+                <hr>
+
+            {% elif level == next_pending_level %}
+                <form method="POST" action="{{ url_for('submit_rating', candidate_id=candidate.id, level=level) }}">
+                    <h5>Submit Ratings for Level {{ level }}</h5>
+
+                    {% for rating_type in ['communication_skills', 'technical_skills', 'learning_ability', 'problem_solving', 'cultural_fitment'] %}
+                        <div class="form-group mb-3">
+                            <label class="d-block mb-1">{{ rating_type.replace('_', ' ').capitalize() }}</label>
+                            <div style="display: flex; gap: 10px;">
+                                {% for i in range(1, 6) %}
+                                    <div class="circle-rating"
+                                        data-level="{{ level }}"
+                                        data-rating-type="{{ rating_type }}"
+                                        data-rating-value="{{ i }}"
+                                        style="width: 40px; height: 40px; border-radius: 50%;
+                                               display: flex; justify-content: center; align-items: center;
+                                               background-color: #ccc; cursor: pointer;">
+                                        <span>{{ i }}</span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="{{ rating_type }}" id="{{ rating_type }}-input">
+                        </div>
+                    {% endfor %}
+
+                    <div class="form-group">
+                        <label>Remarks</label>
+                        <textarea class="form-control" name="remarks"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-2">Submit Rating</button>
+                </form>
+                <hr>
+
+            {% else %}
+                <p class="text-muted">Waiting for previous level to be completed...</p>
+                <hr>
+            {% endif %}
+        {% endfor %}
+
+        {% if not next_pending_level %}
+            <p class="text-success">All ratings have been submitted!</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- JavaScript for handling circle click and setting hidden input -->
+<script>
+    document.querySelectorAll('.circle-rating').forEach(function(circle) {
+        circle.addEventListener('click', function() {
+            let level = this.getAttribute('data-level');
+            let ratingType = this.getAttribute('data-rating-type');
+            let ratingValue = this.getAttribute('data-rating-value');
+
+            let allCircles = document.querySelectorAll(`.circle-rating[data-level='${level}'][data-rating-type='${ratingType}']`);
+            allCircles.forEach(function(otherCircle) {
+                otherCircle.style.backgroundColor = '#ccc';
+                otherCircle.querySelector('span').style.color = 'black';
+            });
+
+            this.style.backgroundColor = '#28a745';
+            this.querySelector('span').style.color = 'white';
+
+            // Set value in hidden input
+            let input = document.getElementById(`${ratingType}-input`);
+            if (input) {
+                input.value = ratingValue;
+            }
+        });
+    });
+</script>
+
 {% endblock %}
