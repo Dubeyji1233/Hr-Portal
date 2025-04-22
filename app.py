@@ -531,7 +531,7 @@ def view_candidates():
 
     conn = get_db_connection()
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor: 
             if session['user']['role'] == 'hr':
                 query = """
                     SELECT c.*, r.job_title AS requisition_title
@@ -553,6 +553,25 @@ def view_candidates():
         conn.close()
 
     return render_template('view_candidates.html', candidates=candidates, user = session['user'])
+
+@app.route('/update_selection_status/<int:candidate_id>', methods=['POST'])
+def update_selection_status(candidate_id):
+    data = request.get_json()
+    new_status = data.get('selection_status')
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE candidates SET selection_status = %s WHERE id = %s", (new_status, candidate_id))
+        conn.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(e)
+        return jsonify({'success': False})
+    finally:
+        conn.close()
+
+
 
 
 @app.route('/download_resume/<int:candidate_id>')
@@ -649,10 +668,12 @@ def candidate_detail(id):
             # Get interviewers and their rating (if exists)
             cursor.execute("""
                 SELECT ih.id AS interviewer_id, ih.level, ih.interviewer_name, ih.interviewer_email,
-                       COALESCE(rt.status, 'pending') AS status, rt.id AS rating_id
-                FROM interview_hierarchy ih
+                    COALESCE(rt.status, 'pending') AS status, rt.id AS rating_id,
+                    rt.communication_skills, rt.technical_skills, rt.learning_ability,
+                    rt.problem_solving, rt.cultural_fitment, rt.remarks, rt.status
+                    FROM interview_hierarchy ih
                 LEFT JOIN ratings rt 
-                  ON rt.interviewer_id = ih.id AND rt.candidate_id = %s
+                ON rt.interviewer_id = ih.id AND rt.candidate_id = %s
                 WHERE ih.requisition_id = %s
                 ORDER BY ih.level ASC
             """, (id, requisition_id))
@@ -676,6 +697,8 @@ def candidate_detail(id):
                            ratings_by_level=ratings_by_level,
                            next_pending_level=next_pending_level,
                            user=user)
+
+
 
 @app.route('/submit_rating/<int:candidate_id>/<int:level>', methods=['POST'])
 def submit_rating(candidate_id, level):
