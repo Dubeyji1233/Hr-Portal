@@ -175,3 +175,12 @@
 2025-04-29 00:24:01,138 - INFO - Candidate detail page requested for ID: 3
 2025-04-29 00:24:01,149 - INFO - Candidate found: XYZ
 2025-04-29 00:24:09,055 - INFO - Loading schedule page for candidate ID: 3
+2025-04-29 10:10:22,286 - WARNING - Unauthorized access to schedule interview.
+2025-04-29 10:10:22,301 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-29 10:10:23,585 - INFO - SSO login initiated
+2025-04-29 10:10:24,019 - INFO - Received authorization code from Azure
+2025-04-29 10:10:24,442 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-29 10:10:24,443 - INFO - Session created for: otpluat@orientindia.net
+2025-04-29 10:10:24,754 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-29 10:10:30,602 - INFO - Loading schedule page for candidate ID: 3
+2025-04-29 10:22:56,164 - INFO - Loading schedule page for candidate ID: 3

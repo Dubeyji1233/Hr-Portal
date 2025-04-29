@@ -1060,9 +1060,6 @@ def schedule_interview(candidate_id):
         user=session['user']
     )
 
-
-
-
 def get_hierarchy(candidate_id):
     logging.info(f"Fetching hierarchy for candidate ID: {candidate_id}")
     cursor = get_db_connection().cursor(pymysql.cursors.DictCursor)
@@ -1141,8 +1138,10 @@ def edit_schedule(candidate_id, level):
     cursor = conn.cursor(pymysql.cursors.DictCursor)
 
     if request.method == 'POST':
-        new_time = request.form['interview_datetime']
+        new_time_str = request.form['interview_datetime']
+        new_time = datetime.strptime(new_time_str, '%Y-%m-%dT%H:%M')  # Adjust format if needed
         logging.info(f"Updating interview time to {new_time} for candidate {candidate_id}, level {level}")
+
         cursor.execute("""
             UPDATE interview_schedule
             SET interview_datetime = %s
@@ -1150,17 +1149,45 @@ def edit_schedule(candidate_id, level):
         """, (new_time, candidate_id, level))
         conn.commit()
 
-        # Optionally: Re-send updated invite
-        cursor.execute("SELECT interviewer_email FROM interview_schedule WHERE candidate_id = %s AND level = %s", (candidate_id, level))
-        email = cursor.fetchone()['interviewer_email']
-        logging.info(f"Resending Teams invite to {email}")
-        send_teams_invite(email, new_time, candidate_id)  # Re-send invite with updated time
+        # Fetch required details
+        cursor.execute("""
+            SELECT i.interviewer_email, c.email AS candidate_email
+            FROM interview_schedule i
+            JOIN candidates c ON i.candidate_id = c.id
+            WHERE i.candidate_id = %s AND i.level = %s
+        """, (candidate_id, level))
+        result = cursor.fetchone()
+
+        access_token = session.get('access_token')
+        if result:
+            interviewer_email = result['interviewer_email']
+            candidate_email = result['candidate_email']
+            duration_minutes = 30
+            subject = f"Interview - Level {level}"
+            location = "Microsoft Teams"
+            description = "This is an automated interview invitation. Please be prepared on time."
+            access_token = access_token  # Replace with your function to get a valid token
+
+            logging.info(f"Sending updated invite to {interviewer_email} and {candidate_email}")
+
+            send_teams_invite(
+                interviewer_email,
+                candidate_email,
+                new_time,
+                duration_minutes,
+                subject,
+                location,
+                description,
+                access_token
+            )
 
         return redirect(url_for('schedule_interview', candidate_id=candidate_id))
 
+    # GET method
     cursor.execute("SELECT * FROM interview_schedule WHERE candidate_id = %s AND level = %s", (candidate_id, level))
     schedule = cursor.fetchone()
     return render_template('edit_schedule.html', schedule=schedule)
+
 
 # ------------------------------------------------------------------------------------#
 @app.route('/logout')
