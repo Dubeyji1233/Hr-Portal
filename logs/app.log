@@ -1,0 +1,177 @@
+2025-04-24 17:39:56,645 - INFO - Updating onboarding info for candidate ID: 2
+2025-04-24 17:39:56,645 - INFO - No offer letter uploaded for candidate ID: 2
+2025-04-24 17:39:56,674 - INFO - Successfully updated candidate ID: 2
+2025-04-25 16:00:49,952 - WARNING - Unauthorized attempt to view candidate detail.
+2025-04-25 16:00:49,970 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-25 16:00:53,221 - INFO - SSO login initiated
+2025-04-25 16:00:53,838 - INFO - Received authorization code from Azure
+2025-04-25 16:00:54,312 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-25 16:00:54,320 - INFO - Session created for: otpluat@orientindia.net
+2025-04-25 16:00:54,656 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-25 16:01:20,460 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: requisition
+2025-04-25 16:01:39,528 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: repository
+2025-04-25 16:18:18,302 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: requisition
+2025-04-25 16:18:58,728 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: requisition
+2025-04-25 17:02:11,273 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-25 17:02:12,624 - INFO - SSO login initiated
+2025-04-25 17:02:13,253 - INFO - Received authorization code from Azure
+2025-04-25 17:02:13,673 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-25 17:02:13,673 - INFO - Session created for: otpluat@orientindia.net
+2025-04-25 17:02:13,995 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-25 17:34:05,311 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-25 17:34:06,867 - INFO - SSO login initiated
+2025-04-25 17:34:07,366 - INFO - Received authorization code from Azure
+2025-04-25 17:34:08,068 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-25 17:34:08,068 - INFO - Session created for: otpluat@orientindia.net
+2025-04-25 17:34:08,392 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-25 17:34:47,469 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: requisition
+2025-04-25 17:44:13,915 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: requisition
+2025-04-28 02:09:49,395 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-28 02:09:50,664 - INFO - SSO login initiated
+2025-04-28 02:09:55,002 - INFO - Received authorization code from Azure
+2025-04-28 02:09:55,745 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-28 02:09:55,749 - INFO - Session created for: otpluat@orientindia.net
+2025-04-28 02:09:56,404 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-28 02:10:01,481 - INFO - Candidate detail page requested for ID: 2
+2025-04-28 02:10:01,494 - INFO - Candidate found: Abhisek Dubey
+2025-04-28 02:10:18,437 - INFO - Candidate detail page requested for ID: 2
+2025-04-28 02:10:18,444 - INFO - Candidate found: Abhisek Dubey
+2025-04-28 02:37:16,569 - INFO - User 'otpluat@orientindia.net' is submitting a job profile.
+2025-04-28 02:37:16,669 - INFO - Job profile submitted successfully.
+2025-04-28 02:54:55,119 - INFO - Downloading resume for candidate ID: 2
+2025-04-28 02:54:55,128 - INFO - Resume found for candidate: Abhisek Dubey
+2025-04-28 12:07:15,008 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-28 12:07:18,926 - INFO - SSO login initiated
+2025-04-28 12:07:19,468 - INFO - Received authorization code from Azure
+2025-04-28 12:07:19,955 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-28 12:07:19,956 - INFO - Session created for: otpluat@orientindia.net
+2025-04-28 12:07:20,270 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-28 12:07:28,363 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: requisition
+2025-04-28 12:08:20,712 - INFO - User 'otpluat@orientindia.net' is submitting a requisition.
+2025-04-28 12:08:20,961 - INFO - Inserted requisition ID: 4
+2025-04-28 12:08:20,963 - INFO - Inserted level 1 interviewer: virajhumbre@orientindia.net
+2025-04-28 12:08:20,964 - INFO - Inserted level 2 interviewer: shubhambhoite@orientindia.net
+2025-04-28 12:08:20,990 - INFO - Requisition 4 committed to the database.
+2025-04-28 12:08:21,248 - INFO - Email sent successfully to HR for requisition by otpluat@orientindia.net
+2025-04-28 12:08:21,249 - INFO - Requisition email sent successfully for ID: 4
+2025-04-28 12:08:21,258 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: requisition
+2025-04-28 12:10:22,826 - INFO - Loading schedule page for candidate ID: 1
+2025-04-28 12:10:32,279 - INFO - Candidate detail page requested for ID: 1
+2025-04-28 12:10:32,387 - INFO - Candidate found: Viraj Humbre
+2025-04-28 12:10:41,835 - INFO - Candidate detail page requested for ID: 3
+2025-04-28 12:10:41,843 - INFO - Candidate found: XYZ
+2025-04-28 12:10:51,817 - INFO - Loading schedule page for candidate ID: 3
+2025-04-28 12:11:08,423 - INFO - Loading schedule page for candidate ID: 3
+2025-04-28 12:11:08,460 - INFO - Scheduling interview: candidate 3, level 1, datetime 2025-04-28T12:15
+2025-04-28 12:11:13,074 - INFO - Teams invite sent to virajhumbre@orientindia.net and xyz@gmail.com
+2025-04-28 12:11:13,087 - INFO - Loading schedule page for candidate ID: 3
+2025-04-28 12:11:28,379 - INFO - Candidate detail page requested for ID: 3
+2025-04-28 12:11:28,385 - INFO - Candidate found: XYZ
+2025-04-28 12:11:53,272 - INFO - otpluat@orientindia.net is submitting rating for candidate 3 at level 1
+2025-04-28 12:11:53,301 - INFO - Rating submitted successfully for candidate 3, level 1
+2025-04-28 12:11:53,309 - INFO - Candidate detail page requested for ID: 3
+2025-04-28 12:11:53,447 - INFO - Candidate found: XYZ
+2025-04-28 12:12:10,160 - INFO - Candidate detail page requested for ID: 3
+2025-04-28 12:12:10,165 - INFO - Candidate found: XYZ
+2025-04-28 12:12:27,261 - INFO - Candidate detail page requested for ID: 2
+2025-04-28 12:12:27,268 - INFO - Candidate found: Abhisek Dubey
+2025-04-28 12:12:37,755 - INFO - View offer letter requested for candidate ID: 2
+2025-04-28 12:12:37,878 - INFO - Serving offer letter for candidate ID: 2 as offer_letter.pdf
+2025-04-28 12:13:24,176 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: requisition
+2025-04-28 12:55:16,325 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-28 12:55:17,822 - INFO - SSO login initiated
+2025-04-28 12:55:19,893 - INFO - Received authorization code from Azure
+2025-04-28 12:55:20,303 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-28 12:55:20,303 - INFO - Session created for: otpluat@orientindia.net
+2025-04-28 12:55:20,619 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-28 12:55:31,774 - INFO - Candidate detail page requested for ID: 3
+2025-04-28 12:55:31,793 - INFO - Candidate found: XYZ
+2025-04-28 12:55:38,733 - INFO - Loading schedule page for candidate ID: 3
+2025-04-28 12:55:40,401 - INFO - Loading schedule page for candidate ID: 3
+2025-04-28 12:55:50,906 - INFO - Loading schedule page for candidate ID: 3
+2025-04-28 12:55:50,912 - INFO - Scheduling interview: candidate 3, level 2, datetime 2025-04-28T13:40
+2025-04-28 12:55:54,808 - INFO - Teams invite sent to shubhambhoite@orientindia.net and xyz@gmail.com
+2025-04-28 12:55:54,819 - INFO - Loading schedule page for candidate ID: 3
+2025-04-28 12:56:15,170 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: requisition
+2025-04-28 13:33:39,319 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-28 13:33:40,489 - INFO - SSO login initiated
+2025-04-28 13:33:41,618 - INFO - Received authorization code from Azure
+2025-04-28 13:33:42,342 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-28 13:33:42,349 - INFO - Session created for: otpluat@orientindia.net
+2025-04-28 13:33:42,709 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-28 14:04:48,032 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-28 14:04:49,523 - INFO - SSO login initiated
+2025-04-28 14:04:49,972 - INFO - Received authorization code from Azure
+2025-04-28 14:04:50,414 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-28 14:04:50,414 - INFO - Session created for: otpluat@orientindia.net
+2025-04-28 14:04:50,732 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-28 14:55:16,522 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-28 14:55:17,911 - INFO - SSO login initiated
+2025-04-28 14:55:18,428 - INFO - Received authorization code from Azure
+2025-04-28 14:55:18,877 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-28 14:55:18,877 - INFO - Session created for: otpluat@orientindia.net
+2025-04-28 14:55:19,209 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-28 15:26:20,954 - WARNING - Unauthorized attempt to view candidate detail.
+2025-04-28 15:26:21,038 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-28 15:26:22,137 - INFO - SSO login initiated
+2025-04-28 15:26:22,645 - INFO - Received authorization code from Azure
+2025-04-28 15:26:23,119 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-28 15:26:23,119 - INFO - Session created for: otpluat@orientindia.net
+2025-04-28 15:26:23,453 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-28 15:26:26,886 - INFO - Candidate detail page requested for ID: 8
+2025-04-28 15:26:26,900 - INFO - Candidate found: Sunayna latte
+2025-04-28 15:28:25,963 - INFO - Candidate detail page requested for ID: 8
+2025-04-28 15:28:25,975 - INFO - Candidate found: Sunayna latte
+2025-04-28 15:39:17,837 - INFO - Candidate detail page requested for ID: 8
+2025-04-28 15:39:17,851 - INFO - Candidate found: Sunayna latte
+2025-04-28 15:43:11,784 - INFO - Loading schedule page for candidate ID: 2
+2025-04-28 15:43:24,469 - INFO - Loading schedule page for candidate ID: 2
+2025-04-28 15:43:24,480 - INFO - Scheduling interview: candidate 2, level 3, datetime 2025-04-28T16:00
+2025-04-28 15:43:29,101 - INFO - Teams invite sent to ridhimasawant@orientindia.net and ab@gmail.com
+2025-04-28 15:43:29,111 - INFO - Loading schedule page for candidate ID: 2
+2025-04-28 17:02:28,167 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-28 17:02:29,327 - INFO - SSO login initiated
+2025-04-28 17:02:29,901 - INFO - Received authorization code from Azure
+2025-04-28 17:02:30,380 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-28 17:02:30,383 - INFO - Session created for: otpluat@orientindia.net
+2025-04-28 17:02:30,708 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-28 17:02:34,184 - INFO - Candidate detail page requested for ID: 2
+2025-04-28 17:02:34,194 - INFO - Candidate found: Abhisek Dubey
+2025-04-28 17:07:29,919 - INFO - Candidate detail page requested for ID: 2
+2025-04-28 17:07:29,922 - INFO - Candidate found: Abhisek Dubey
+2025-04-28 17:13:14,719 - INFO - Candidate detail page requested for ID: 2
+2025-04-28 17:13:14,727 - INFO - Candidate found: Abhisek Dubey
+2025-04-28 17:13:52,101 - INFO - Candidate detail page requested for ID: 2
+2025-04-28 17:13:52,106 - INFO - Candidate found: Abhisek Dubey
+2025-04-28 17:13:54,754 - INFO - Candidate detail page requested for ID: 2
+2025-04-28 17:13:54,758 - INFO - Candidate found: Abhisek Dubey
+2025-04-28 17:15:27,631 - INFO - Candidate detail page requested for ID: 2
+2025-04-28 17:15:27,637 - INFO - Candidate found: Abhisek Dubey
+2025-04-28 17:16:13,462 - INFO - Candidate detail page requested for ID: 2
+2025-04-28 17:16:13,469 - INFO - Candidate found: Abhisek Dubey
+2025-04-28 17:18:10,924 - INFO - Candidate detail page requested for ID: 2
+2025-04-28 17:18:10,933 - INFO - Candidate found: Abhisek Dubey
+2025-04-28 17:33:24,342 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-28 17:33:25,682 - INFO - SSO login initiated
+2025-04-28 17:33:26,381 - INFO - Received authorization code from Azure
+2025-04-28 17:33:26,809 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-28 17:33:26,814 - INFO - Session created for: otpluat@orientindia.net
+2025-04-28 17:33:27,160 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-28 17:33:28,409 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: requisition
+2025-04-28 17:34:17,041 - INFO - Candidate detail page requested for ID: 2
+2025-04-28 17:34:17,050 - INFO - Candidate found: Abhisek Dubey
+2025-04-28 17:43:10,190 - INFO - Loading schedule page for candidate ID: 2
+2025-04-29 00:23:41,215 - WARNING - Unauthorized access to schedule interview.
+2025-04-29 00:23:41,429 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-04-29 00:23:42,970 - INFO - SSO login initiated
+2025-04-29 00:23:43,750 - INFO - Received authorization code from Azure
+2025-04-29 00:23:44,194 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-04-29 00:23:44,194 - INFO - Session created for: otpluat@orientindia.net
+2025-04-29 00:23:44,546 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-04-29 00:23:49,408 - INFO - Candidate detail page requested for ID: 1
+2025-04-29 00:23:49,408 - INFO - Candidate found: Viraj Humbre
+2025-04-29 00:23:55,411 - INFO - Candidate detail page requested for ID: 3
+2025-04-29 00:23:55,424 - INFO - Candidate found: XYZ
+2025-04-29 00:24:01,138 - INFO - Candidate detail page requested for ID: 3
+2025-04-29 00:24:01,149 - INFO - Candidate found: XYZ
+2025-04-29 00:24:09,055 - INFO - Loading schedule page for candidate ID: 3

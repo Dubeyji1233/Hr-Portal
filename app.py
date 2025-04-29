@@ -1,5 +1,5 @@
 
-from flask import send_file,Flask, flash,render_template, request, redirect, url_for, session, flash,jsonify
+from flask import send_file,Flask, flash,render_template, request, redirect, url_for, session, flash,jsonify, Response, abort 
 import pymysql
 import msal
 from datetime import datetime,timedelta
@@ -10,6 +10,8 @@ import requests
 from datetime import datetime
 import io
 import pytz
+import logging
+from logging.handlers import RotatingFileHandler
 
 
 load_dotenv()
@@ -55,6 +57,17 @@ def build_auth_url():
         redirect_uri=url_for('auth_response', _external=True).replace("127.0.0.1", "localhost")
     )
 
+os.makedirs("logs", exist_ok=True)
+
+logger = logging.getLogger("AppLogger")
+logger.setLevel(logging.INFO)
+
+if not logger.handlers:
+    handler = RotatingFileHandler("logs/app.log", maxBytes=1_000_000, backupCount=5)
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
 # ------------------- Routes -------------------
 
 @app.route('/')
@@ -68,6 +81,7 @@ def login():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
+        logger.info(f"Login attempt for user: {email}")
 
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -78,27 +92,33 @@ def login():
         if user:
             # Check if the user is an SSO user (no password stored)
             if not user.get("password_hash"):
+                logger.warning(f"SSO account login attempted via password by: {email}")
                 flash("This account uses SSO. Please login using Azure.")
                 return redirect(url_for('login'))
 
             # Validate password
             if password == user.get("password_hash"):
+                logger.info(f"Login successful for user: {email}")
                 session["user"] = {"email": user["email"], "name": user["name"], "role": user.get("role", "static")}
                 return redirect(url_for('home'))
             else:
+                logger.warning(f"Incorrect password for user: {email}")
                 flash("Incorrect password.")
         else:
+            logger.warning(f"Login failed. User not found: {email}")
             flash("User not found.")
 
     return render_template('login.html')
 
 @app.route('/sso-login')
 def sso_login():
+    logger.info("SSO login initiated")
     return redirect(build_auth_url())
 
 @app.route(REDIRECT_PATH)
 def auth_response():
     code = request.args.get('code')
+    logger.info("Received authorization code from Azure")
     msal_app = build_msal_app()
     result = msal_app.acquire_token_by_authorization_code(
         code,
@@ -126,6 +146,7 @@ def auth_response():
                 user_row = cursor.fetchone()
 
                 if user_row:
+                    logger.info(f"SSO user found in database: {email}")
                     # Existing user
                     user_data = {
                         "email": user_row["email"],
@@ -134,6 +155,7 @@ def auth_response():
                     }
                 else:
                     # New user — assign default role "HR"
+                    logger.info(f"New SSO user, adding to database: {email}")
                     default_role = "admin"
                     cursor.execute(
                         "INSERT INTO users (email, name, azure_oid, role) VALUES (%s, %s, %s, %s)",
@@ -151,17 +173,21 @@ def auth_response():
         if user_data:
             session["user"] = user_data
             session["access_token"] = result["access_token"]
+            logger.info(f"Session created for: {email}")
             return redirect(url_for('home'))
-
+        
+    logger.error("SSO Login failed: Token acquisition unsuccessful.")
     return "SSO Login failed", 401
 # ------------------------------------------------------------------------------------#
 @app.route('/home')
 def home():
     if 'user' not in session:
+        logger.warning("Unauthorized access to /home. Redirecting to login.")
         return redirect(url_for('login'))
 
     page = request.args.get('page', 'dashboard')
     user_role = session['user']['role']
+    logger.info(f"User '{session['user']['email']}' with role '{user_role}' accessed /home with page: {page}")
 
     allowed_pages = {
         'manager': ['dashboard', 'requisition', 'repository', 'view_requisitions'],
@@ -173,6 +199,7 @@ def home():
     allowed = all_pages if user_role == 'admin' else allowed_pages.get(user_role, [])
 
     if page not in allowed:
+        logger.warning(f"User '{session['user']['email']}' attempted to access unauthorized page: {page}")
         page = 'notallowed'
 
     return render_template(
@@ -180,28 +207,33 @@ def home():
         user=session['user'],
         page=page
     )
+
 # ------------------------------------------------------------------------------------#
 @app.route('/submit_requisition', methods=['POST'])
 def submit_requisition():
     data = request.form
+    user_email = session['user']['email']
+    logger.info(f"User '{user_email}' is submitting a requisition.")
+
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            # Insert into requisitions
+            # Insert requisition
             cursor.execute("""
                 INSERT INTO requisitions (
                     job_title, department, number_of_openings,
                     skills_required, location, hiring_type,
-                    budget,job_description, created_by
+                    budget, job_description, created_by
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 data['job_title'], data['department'], data['number_of_openings'],
                 data['skills_required'], data['location'], data['hiring_type'],
-                data['budget'],data['job_description'], session['user']['email']
+                data['budget'], data['job_description'], user_email
             ))
             requisition_id = conn.insert_id()
+            logger.info(f"Inserted requisition ID: {requisition_id}")
 
-            # Insert Interview Hierarchy
+            # Insert interview hierarchy
             levels = int(data['levels'])
             for i in range(1, levels + 1):
                 cursor.execute("""
@@ -211,27 +243,35 @@ def submit_requisition():
                 """, (
                     requisition_id, i, data[f'interviewer_name_{i}'], data[f'interviewer_email_{i}']
                 ))
+                logger.info(f"Inserted level {i} interviewer: {data[f'interviewer_email_{i}']}")
+
         conn.commit()
-        # ✅ Email Notification to HR
+        logger.info(f"Requisition {requisition_id} committed to the database.")
+
+        # Email
         success, message = send_requisition_email(data)
         if success:
+            logger.info(f"Requisition email sent successfully for ID: {requisition_id}")
             flash('Requisition submitted and email sent successfully!')
         else:
+            logger.warning(f"Email failed for requisition ID {requisition_id}: {message}")
             flash(f'Requisition submitted, but email failed: {message}')
 
     except Exception as e:
-        print(e)
+        logger.error(f"Error submitting requisition: {e}")
         conn.rollback()
         flash('An error occurred while submitting the requisition.')
     finally:
         conn.close()
     return redirect(url_for('home', page='requisition'))
+
 # ------------------------------------------------------------------------------------#
 def send_requisition_email(requisition_data):
     access_token = session.get("access_token")
     user = session.get("user")
 
     if not access_token or not user:
+        logger.error("Attempted to send email without authentication.")
         return False, "User not authenticated."
 
     headers = {
@@ -277,8 +317,10 @@ Regards,
     )
 
     if response.status_code == 202:
+        logger.info(f"Email sent successfully to HR for requisition by {user['email']}")
         return True, "Mail sent"
     else:
+        logger.error(f"Failed to send email: {response.text}")
         return False, f"Failed to send mail: {response.text}"
 # ------------------------------------------------------------------------------------#
 # @app.route('/assign_requisition', methods=['GET', 'POST'])
@@ -339,16 +381,18 @@ Regards,
 @app.route('/view_requisitions')
 def view_requisitions():
     if 'user' not in session:
+        logging.warning("Unauthorized access to /view_requisitions")
         return redirect(url_for('home'))
 
     user = session['user']
+    logging.info(f"User {user['email']} accessing /view_requisitions")
     conn = get_db_connection()
     requisitions = []
 
     try:
         with conn.cursor() as cursor:
             if user['role'] in ['admin', 'hr lead']:
-                # Admins and HR Leads see all requisitions
+                logging.info(f"{user['email']} fetching all requisitions (Role: {user['role']})")
                 cursor.execute("""
                     SELECT r.*, u1.name AS created_by_name, u2.name AS assigned_to_name
                     FROM requisitions r
@@ -357,7 +401,7 @@ def view_requisitions():
                     ORDER BY r.created_at DESC
                 """)
             else:
-                # HR sees only their own assigned requisitions
+                logging.info(f"{user['email']} fetching assigned requisitions")
                 cursor.execute("""
                     SELECT r.id, r.job_title, r.department, r.created_at,r.created_by,
                            r.assigned_to, u1.name AS created_by_name, u2.name AS assigned_to_name
@@ -367,16 +411,16 @@ def view_requisitions():
                     WHERE r.assigned_to = %s
                     ORDER BY r.created_at DESC
                 """, (user['email'],))
-
             requisitions = cursor.fetchall()
 
     except Exception as e:
-        print("Error in view_requisitions:", e)
+        logging.error(f"Error in view_requisitions: {e}")
         flash("Something went wrong fetching requisitions", "danger")
     finally:
         conn.close()
 
-    return render_template('view_requisitions.html', requisitions=requisitions, user=user )
+    return render_template('view_requisitions.html', requisitions=requisitions, user=user)
+
 
 # ------------------------------------------------------------------------------------#
 
@@ -384,16 +428,17 @@ def view_requisitions():
 @app.route('/requisition/<int:requisition_id>', methods=['GET', 'POST'])
 def view_requisition_details(requisition_id):
     if 'user' not in session:
+        logging.warning("Unauthorized access to requisition details")
         return redirect(url_for('home'))
 
     user = session['user']
+    logging.info(f"{user['email']} accessing requisition ID {requisition_id}")
     conn = get_db_connection()
     requisition = None
     hr_users = []
 
     try:
         with conn.cursor() as cursor:
-            # Fetch the requisition
             cursor.execute("""
                 SELECT r.*, u1.name AS created_by_name, u2.name AS assigned_to_name
                 FROM requisitions r
@@ -404,15 +449,15 @@ def view_requisition_details(requisition_id):
             requisition = cursor.fetchone()
 
             if not requisition:
+                logging.warning(f"Requisition {requisition_id} not found.")
                 flash("Requisition not found", "warning")
                 return redirect(url_for('view_requisitions'))
 
-            # Only if user is admin or hr lead, fetch HR list
             if user['role'] in ['admin', 'hr lead']:
+                logging.info(f"{user['email']} fetching HR users for assignment")
                 cursor.execute("SELECT name, email FROM users WHERE role = 'hr'")
                 hr_users = cursor.fetchall()
 
-            # Handle assignment POST
             if request.method == 'POST' and user['role'] in ['admin', 'hr lead']:
                 assigned_to = request.form['assigned_to']
                 cursor.execute("""
@@ -421,11 +466,12 @@ def view_requisition_details(requisition_id):
                     WHERE id = %s
                 """, (assigned_to, requisition_id))
                 conn.commit()
+                logging.info(f"Requisition {requisition_id} assigned to {assigned_to} by {user['email']}")
                 flash("Requisition successfully assigned!", "success")
                 return redirect(url_for('view_requisition_details', requisition_id=requisition_id))
 
     except Exception as e:
-        print("Error fetching requisition details:", e)
+        logging.error(f"Error fetching requisition details: {e}")
         flash("Error loading requisition details", "danger")
     finally:
         conn.close()
@@ -433,11 +479,13 @@ def view_requisition_details(requisition_id):
     return render_template('requisition_details.html', requisition=requisition, hr_users=hr_users, user=user)
 
 
+
 # ------------------------------------------------------------------------------------#
 @app.route('/user_management')
 def user_management():
     print("Session contents:", session)
     user = session.get('user')
+    logging.info(f"{user['email']} accessing user management")
     print(user)
     email = session['user']['email']
     print ("Email", email)
@@ -446,6 +494,7 @@ def user_management():
         with connection.cursor() as cursor:
             cursor.execute("SELECT * FROM users")
             db_users = cursor.fetchall()
+            logging.info(f"Fetched {len(db_users)} users for management view")
     finally:
         connection.close()
     return render_template('user_management.html', users=db_users,user=user)
@@ -456,15 +505,16 @@ def update_role(user_id):
     new_role = request.form.get('role')
 
     if not new_role:
+        logging.warning(f"Attempt to update role for user {user_id} with invalid role")
         flash("Invalid role selected.", "danger")
         return redirect(url_for('user_management'))
 
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
-            sql = "UPDATE users SET role = %s WHERE id = %s"
-            cursor.execute(sql, (new_role, user_id))
+            cursor.execute("UPDATE users SET role = %s WHERE id = %s", (new_role, user_id))
         connection.commit()
+        logging.info(f"User ID {user_id} role updated to {new_role}")
         flash("Role updated successfully.", "success")
     finally:
         connection.close()
@@ -474,6 +524,7 @@ def update_role(user_id):
 # ------------------------------------------------------------------------------------#
 
 def get_requisitions(email, user):
+    logging.info(f"Fetching requisitions for {email} (Role: {user})")
     connection = get_db_connection()
     with connection.cursor() as cursor:
         if user in ['admin', 'hr lead']:
@@ -481,14 +532,18 @@ def get_requisitions(email, user):
         else:
             cursor.execute("SELECT * FROM requisitions WHERE assigned_to = %s", (email,))
         requisitions = cursor.fetchall()
+        logging.info(f"Found {len(requisitions)} requisitions")
     connection.close()
     return requisitions
 
 
 @app.route('/submit_candidate', methods=['GET', 'POST'])
 def submit_candidate():
+    logging.info("Accessed /submit_candidate route")
+    logging.debug(f"Session contents: {session}")
     print("Session contents:", session)
     if 'user' not in session:
+        logging.warning("Unauthorized access attempt to submit_candidate")
         return redirect(url_for('home'))
 
 
@@ -496,16 +551,25 @@ def submit_candidate():
     user = session['user']['role']
     requisitions = get_requisitions(user_id, user)
 
+
     if request.method == 'POST':
+        logging.info(f"Candidate submission attempt by user: {user_id}")
+
         name = request.form['name']
         email = request.form['email']
         phone = request.form['phone']
         skills = request.form['skills']
         requisition_id = request.form['requisition_id']
         resume_file = request.files['resume']
-
+        total_exp = request.form['total_exp']
+        current_loc = request.form['current_loc']
+        current_ctc = request.form['current_ctc']
+        expected_ctc = request.form['expected_ctc']
+        source = request.form['source']
+        
         allowed_ids = [str(r['id']) for r in requisitions]
         if requisition_id not in allowed_ids:
+            logging.error(f"Unauthorized requisition access attempt by {user_id} for requisition_id {requisition_id}")
             return "Unauthorized access to requisition", 403
 
         resume_blob = resume_file.read()
@@ -513,49 +577,67 @@ def submit_candidate():
         connection = get_db_connection()
         with connection.cursor() as cursor:
             cursor.execute("""
-                INSERT INTO candidates (name, email, phone, skills, requisition_id, resume, submitted_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (name, email, phone, skills, requisition_id, resume_blob, user_id))
+                INSERT INTO candidates (name, email, phone, skills, requisition_id, resume, submitted_by, total_exp,
+                           current_loc, current_ctc, expected_ctc, source)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (name, email, phone, skills, requisition_id, resume_blob, user_id, total_exp, current_loc, current_ctc,
+                  expected_ctc, source))
             connection.commit()
         connection.close()
-
-        return "Candidate submitted successfully!"
+        logging.info(f"Candidate {name} submitted successfully by {user_id}")
+        return 'success'  # This will trigger the modal on success
 
     return render_template('submit_candidate.html', requisitions=requisitions, user = session['user'])
 
 # ------------------------------------------------------------------------------------#
 @app.route('/view_candidates')
 def view_candidates():
+    logging.info("Accessed /view_candidates route")
+
     if 'user' not in session:
+        logging.warning("Unauthorized access attempt to view_candidates")
         return redirect(url_for('home'))
 
     conn = get_db_connection()
     try:
-        with conn.cursor(pymysql.cursors.DictCursor) as cursor: 
-            if session['user']['role'] == 'hr':
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            user_role = session['user']['role']
+            user_email = session['user']['email']
+            logging.info(f"{user_email} ({user_role}) is viewing candidates")
+
+            if user_role == 'hr':
                 query = """
-                    SELECT c.*, r.job_title AS requisition_title
+                    SELECT c.*, r.job_title AS requisition_title,
+                    c.offer_letter IS NOT NULL AS offer_exists
                     FROM candidates c
                     JOIN requisitions r ON c.requisition_id = r.id
                     WHERE c.submitted_by = %s
                 """
-                cursor.execute(query, (session['user']['email'],))
+                cursor.execute(query, (user_email,))
             else:
                 query = """
-                    SELECT c.*, r.job_title AS requisition_title
+                    SELECT c.*, r.job_title AS requisition_title,
+                    c.offer_letter IS NOT NULL AS offer_exists
                     FROM candidates c
                     JOIN requisitions r ON c.requisition_id = r.id
                 """
                 cursor.execute(query)
 
             candidates = cursor.fetchall()
+            logging.info(f"Retrieved {len(candidates)} candidates")
+    except Exception as e:
+        logging.exception("Error while fetching candidates:")
+        return "Error loading candidates", 500
     finally:
         conn.close()
 
-    return render_template('view_candidates.html', candidates=candidates, user = session['user'])
+    return render_template('view_candidates.html', candidates=candidates, user=session['user'])
+
 
 @app.route('/update_selection_status/<int:candidate_id>', methods=['POST'])
 def update_selection_status(candidate_id):
+    logging.info(f"Accessed update_selection_status for candidate ID: {candidate_id}")
+
     data = request.get_json()
     new_status = data.get('selection_status')
 
@@ -564,18 +646,135 @@ def update_selection_status(candidate_id):
         with conn.cursor() as cursor:
             cursor.execute("UPDATE candidates SET selection_status = %s WHERE id = %s", (new_status, candidate_id))
         conn.commit()
+        logging.info(f"Updated selection status of candidate {candidate_id} to '{new_status}'")
         return jsonify({'success': True})
     except Exception as e:
-        print(e)
+        logging.exception(f"Failed to update selection status for candidate {candidate_id}")
         return jsonify({'success': False})
     finally:
         conn.close()
+
+
+@app.route('/update_onboarding/<int:candidate_id>', methods=['POST'])
+def update_onboarding(candidate_id):
+    final_ctc             = request.form.get('final_ctc')
+    planned_joining_date  = request.form.get('planned_joining_date')
+    actual_joining_date   = request.form.get('actual_joining_date')
+    offer_file            = request.files.get('offer_letter')
+
+    logger.info(f"Updating onboarding info for candidate ID: {candidate_id}")
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            if offer_file and offer_file.filename:
+                offer_blob = offer_file.read()
+                if offer_blob:
+                    logger.info(f"Offer letter uploaded for candidate ID: {candidate_id}")
+                    cursor.execute("""
+                        UPDATE candidates
+                        SET final_ctc = %s,
+                            planned_joining_date = %s,
+                            actual_joining_date = %s,
+                            offer_letter = %s
+                        WHERE id = %s
+                    """, (
+                        final_ctc or None,
+                        planned_joining_date or None,
+                        actual_joining_date or None,
+                        offer_blob,
+                        candidate_id
+                    ))
+                else:
+                    logger.warning(f"Empty file submitted for offer letter - candidate ID: {candidate_id}")
+                    cursor.execute("""
+                        UPDATE candidates
+                        SET final_ctc = %s,
+                            planned_joining_date = %s,
+                            actual_joining_date = %s
+                        WHERE id = %s
+                    """, (
+                        final_ctc or None,
+                        planned_joining_date or None,
+                        actual_joining_date or None,
+                        candidate_id
+                    ))
+            else:
+                logger.info(f"No offer letter uploaded for candidate ID: {candidate_id}")
+                cursor.execute("""
+                    UPDATE candidates
+                    SET final_ctc = %s,
+                        planned_joining_date = %s,
+                        actual_joining_date = %s
+                    WHERE id = %s
+                """, (
+                    final_ctc or None,
+                    planned_joining_date or None,
+                    actual_joining_date or None,
+                    candidate_id
+                ))
+
+        conn.commit()
+        logger.info(f"Successfully updated candidate ID: {candidate_id}")
+        return jsonify(success=True)
+
+    except Exception as e:
+        logger.error(f"Error updating onboarding for candidate ID {candidate_id}: {e}", exc_info=True)
+        return jsonify(success=False, error=str(e))
+
+    finally:
+        conn.close()
+
+
+@app.route('/view_offer/<int:candidate_id>')
+def view_offer(candidate_id):
+    logger.info(f"View offer letter requested for candidate ID: {candidate_id}")
+    conn = get_db_connection()
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute("SELECT offer_letter FROM candidates WHERE id = %s", (candidate_id,))
+            row = cursor.fetchone()
+    finally:
+        conn.close()
+
+    if row and row['offer_letter']:
+        file_data = row['offer_letter']
+        file_stream = io.BytesIO(file_data)
+
+        header = file_data[:8]
+        if header.startswith(b'%PDF'):
+            mime_type = 'application/pdf'
+            filename = 'offer_letter.pdf'
+        elif header.startswith(b'PK'):
+            mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            filename = 'offer_letter.docx'
+        elif header.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'):
+            mime_type = 'application/msword'
+            filename = 'offer_letter.doc'
+        else:
+            logger.error(f"Unsupported file format for candidate ID: {candidate_id}")
+            abort(400, description="Unsupported file format")
+
+        logger.info(f"Serving offer letter for candidate ID: {candidate_id} as {filename}")
+        return send_file(
+            file_stream,
+            mimetype=mime_type,
+            download_name=filename,
+            as_attachment=False
+        )
+
+    logger.warning(f"Offer letter not found for candidate ID: {candidate_id}")
+    flash("Offer letter not found.")
+    return "Offer letter not found", 404
+
+
 
 
 
 
 @app.route('/download_resume/<int:candidate_id>')
 def download_resume(candidate_id):
+    logger.info(f"Downloading resume for candidate ID: {candidate_id}")
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -583,40 +782,45 @@ def download_resume(candidate_id):
             result = cursor.fetchone()
 
             if result and result['resume']:
+                logger.info(f"Resume found for candidate: {result['name']}")
                 return send_file(
                     io.BytesIO(result['resume']),
                     download_name=f"{result['name']}_Resume.pdf",
                     as_attachment=True
                 )
             else:
+                logger.warning(f"No resume found for candidate ID: {candidate_id}")
                 return "No resume found for this candidate.", 404
     finally:
         conn.close()
 
+
 @app.route('/shortlist_candidate/<int:candidate_id>', methods=['POST'])
 def shortlist_candidate(candidate_id):
     if 'user' not in session:
+        logger.warning("Unauthorized access attempt to shortlist.")
         return redirect(url_for('home'))
 
     user = session['user']
     email = user['email']
     name = user['name']
     now = datetime.now()
+    logger.info(f"User {name} ({email}) attempting to shortlist candidate ID: {candidate_id}")
 
     connection = get_db_connection()
     cursor = connection.cursor()
 
-    # Step 1: Get the user ID based on the email from the session
     cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
     result = cursor.fetchone()
     if not result:
+        logger.error(f"User {email} not found in database.")
         cursor.close()
         connection.close()
         return jsonify({'success': False, 'error': 'User not found'})
 
     user_id = result['id']
+    logger.info(f"Shortlisting candidate {candidate_id} by user ID {user_id}")
 
-    # Step 2: Update candidate as shortlisted
     query = """
         UPDATE candidates
         SET is_shortlisted = TRUE,
@@ -639,8 +843,10 @@ def shortlist_candidate(candidate_id):
 @app.route('/candidate/<int:id>')
 def candidate_detail(id):
     if 'user' not in session:
+        logger.warning("Unauthorized attempt to view candidate detail.")
         return redirect(url_for('home'))
 
+    logger.info(f"Candidate detail page requested for ID: {id}")
     user = session['user']
     conn = get_db_connection()
 
@@ -660,9 +866,11 @@ def candidate_detail(id):
             candidate = cursor.fetchone()
 
             if not candidate:
+                logger.warning(f"Candidate ID {id} not found.")
                 flash("Candidate not found", "warning")
                 return redirect(url_for('view_candidates'))
 
+            logger.info(f"Candidate found: {candidate['name']}")
             requisition_id = candidate['requisition_id']
 
             # Get interviewers and their rating (if exists)
@@ -688,6 +896,7 @@ def candidate_detail(id):
 
     except Exception as e:
         print("Error:", e)
+        logger.exception(f"Error loading candidate detail for ID: {id}")
         flash("Something went wrong.", "danger")
     finally:
         conn.close()
@@ -703,6 +912,7 @@ def candidate_detail(id):
 @app.route('/submit_rating/<int:candidate_id>/<int:level>', methods=['POST'])
 def submit_rating(candidate_id, level):
     user = session.get('user')
+    logger.info(f"{user['email']} is submitting rating for candidate {candidate_id} at level {level}")
     remarks = request.form.get('remarks')
     
     # Extract rating values from the form
@@ -743,9 +953,11 @@ def submit_rating(candidate_id, level):
                     remarks, 'submitted'
                 ))
                 conn.commit()
+                logger.info(f"Rating submitted successfully for candidate {candidate_id}, level {level}")
 
         flash("Rating submitted successfully.", "success")
     except Exception as e:
+        logger.exception(f"Submit rating error for candidate {candidate_id}, level {level}")
         print("Submit rating error:", e)
         flash("Error submitting rating.", "danger")
     finally:
@@ -761,8 +973,10 @@ def submit_rating(candidate_id, level):
 @app.route('/schedule_interview/<int:candidate_id>', methods=['GET', 'POST'])
 def schedule_interview(candidate_id):
     if 'user' not in session:
+        logger.warning("Unauthorized access to schedule interview.")
         return redirect(url_for('home'))
 
+    logger.info(f"Loading schedule page for candidate ID: {candidate_id}")
     connection = get_db_connection()
     cursor = connection.cursor(pymysql.cursors.DictCursor)
 
@@ -783,10 +997,13 @@ def schedule_interview(candidate_id):
         interview_datetime_str = request.form['interview_datetime']
         interview_datetime = datetime.strptime(interview_datetime_str, '%Y-%m-%dT%H:%M')
 
+        logger.info(f"Scheduling interview: candidate {candidate_id}, level {level}, datetime {interview_datetime_str}")
+
         # 🧠 Check if previous level is completed (except for level 1)
         if level > 1:
             previous = scheduled_interviews.get(level - 1)
             if not previous or previous['status'] != 'completed':
+                logger.warning(f"Cannot schedule Level {level} without completing Level {level - 1}")
                 flash(f"You must complete Level {level - 1} before scheduling Level {level}.", "danger")
                 return redirect(request.url)
 
@@ -800,6 +1017,7 @@ def schedule_interview(candidate_id):
         result = cursor.fetchone()
 
         if not result:
+            logger.error(f"No interviewer found for candidate {candidate_id}, level {level}")
             flash('Invalid level or candidate', 'danger')
             return redirect(request.url)
 
@@ -824,7 +1042,9 @@ def schedule_interview(candidate_id):
                 description="This is a scheduled interview. Please be on time.",
                 access_token=access_token
             )
+            logger.info(f"Teams invite sent to {result['interviewer_email']} and {result['candidate_email']}")
         except Exception as e:
+            logger.exception("Error sending Teams invite")
             print("Error sending invite:", e)
             flash("Interview scheduled, but failed to send Teams invite.", "warning")
 
@@ -844,6 +1064,7 @@ def schedule_interview(candidate_id):
 
 
 def get_hierarchy(candidate_id):
+    logging.info(f"Fetching hierarchy for candidate ID: {candidate_id}")
     cursor = get_db_connection().cursor(pymysql.cursors.DictCursor)
     cursor.execute("SELECT requisition_id FROM candidates WHERE id = %s", (candidate_id,))
     req = cursor.fetchone()
@@ -851,6 +1072,7 @@ def get_hierarchy(candidate_id):
     return cursor.fetchall()
 
 def send_teams_invite(interviewer_email, candidate_email, start_time, duration_minutes, subject, location, description, access_token):
+    logging.info(f"Sending Teams invite to {interviewer_email} and {candidate_email} for {start_time}")
     # Ensure timezone-aware datetime (UTC)
     if start_time.tzinfo is None:
         start_time = pytz.utc.localize(start_time)
@@ -906,16 +1128,21 @@ def send_teams_invite(interviewer_email, candidate_email, start_time, duration_m
     )
 
     if response.status_code >= 400:
+        logging.error(f"Failed to send Teams invite: {response.status_code} - {response.text}")
         raise Exception(f"Failed to send Teams invite: {response.status_code} {response.text}")
 
+    logging.info("Teams invite sent successfully.")
     return response.json()
+
 @app.route('/edit_schedule/<int:candidate_id>/<int:level>', methods=['GET', 'POST'])
 def edit_schedule(candidate_id, level):
+    logging.info(f"Accessed edit_schedule for candidate {candidate_id}, level {level}")
     conn = get_db_connection()
     cursor = conn.cursor(pymysql.cursors.DictCursor)
 
     if request.method == 'POST':
         new_time = request.form['interview_datetime']
+        logging.info(f"Updating interview time to {new_time} for candidate {candidate_id}, level {level}")
         cursor.execute("""
             UPDATE interview_schedule
             SET interview_datetime = %s
@@ -926,6 +1153,7 @@ def edit_schedule(candidate_id, level):
         # Optionally: Re-send updated invite
         cursor.execute("SELECT interviewer_email FROM interview_schedule WHERE candidate_id = %s AND level = %s", (candidate_id, level))
         email = cursor.fetchone()['interviewer_email']
+        logging.info(f"Resending Teams invite to {email}")
         send_teams_invite(email, new_time, candidate_id)  # Re-send invite with updated time
 
         return redirect(url_for('schedule_interview', candidate_id=candidate_id))
@@ -938,13 +1166,16 @@ def edit_schedule(candidate_id, level):
 @app.route('/logout')
 def logout():
     user = session.get("user")
+    logging.info(f"User {user} logged out")
     session.clear()
 
     if user and user.get("role") == "Static":
+        logging.info("Redirecting static user to login page.")
         # Redirect static user to your local login/home page
         return redirect(url_for('login'))  # or url_for('home') if you want them to land on home
     else:
         # Redirect SSO user to Microsoft's logout
+        logging.info("Redirecting SSO user to Microsoft logout.")
         return redirect(
             "https://login.microsoftonline.com/common/oauth2/v2.0/logout"
             f"?post_logout_redirect_uri={url_for('login', _external=True)}"
@@ -952,6 +1183,7 @@ def logout():
 
 @app.route('/mark_completed/<int:candidate_id>/<int:level>', methods=['GET'])
 def mark_completed(candidate_id, level):
+    logging.info(f"Marking interview as completed for candidate {candidate_id}, level {level}")
     connection = get_db_connection()
     cursor = connection.cursor()
     cursor.execute("""
@@ -961,7 +1193,124 @@ def mark_completed(candidate_id, level):
     """, (candidate_id, level))
     connection.commit()
     flash(f'Level {level} marked as completed!', 'success')
+    logging.info("Interview marked as completed and flash message triggered.")
     return redirect(url_for('schedule_interview', candidate_id=candidate_id))
+
+@app.route('/view_repository')
+def view_repository():
+    logging.info("Accessed /view_repository route")
+
+    if 'user' not in session:
+        logging.warning("Unauthorized access attempt to view_repository")
+        return redirect(url_for('home'))
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            user_role = session['user']['role']
+            user_email = session['user']['email']
+            logging.info(f"{user_email} ({user_role}) is viewing the job profile repository")
+
+            if user_role == 'hr':
+                query = """
+                    SELECT *, 
+                    (total_exp + TIMESTAMPDIFF(YEAR, date, CURDATE())) AS dynamic_exp
+                    FROM job_profile
+                    WHERE source = %s
+                """
+                cursor.execute(query, (user_email,))
+            else:
+                query = """
+                    SELECT *, 
+                    (total_exp + TIMESTAMPDIFF(YEAR, date, CURDATE())) AS dynamic_exp
+                    FROM job_profile
+                """
+                cursor.execute(query)
+
+            profiles = cursor.fetchall()
+            logging.info(f"Retrieved {len(profiles)} job profiles from repository")
+    except Exception as e:
+        logging.exception("Error while fetching job profiles:")
+        return "Error loading job profiles", 500
+    finally:
+        conn.close()
+
+    return render_template('view_repository.html', profiles=profiles, user=session['user'])
+
+
+@app.route('/submit_job_profile', methods=['POST'])
+def submit_job_profile():
+    if 'user' not in session:
+        flash("Please log in to submit a profile.")
+        return redirect(url_for('login'))
+
+    data = request.form
+    file = request.files['cv']
+    user_email = session['user']['email']
+    logger.info(f"User '{user_email}' is submitting a job profile.")
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO job_profile (
+                    date, name, email_id, contact_number, total_exp,
+                    current_loc, skills, current_ctc, exp_ctc, source, cv
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                data['date'], data['name'], data['email_id'], data['contact_number'],
+                data['total_exp'], data['current_loc'], data['skills'],
+                data['current_ctc'], data['exp_ctc'], data['source'],
+                file.read() if file else None
+            ))
+        conn.commit()
+        logger.info("Job profile submitted successfully.")
+        flash("Profile submitted successfully!")
+    except Exception as e:
+        logger.exception("Error submitting job profile:")
+        conn.rollback()
+        flash("An error occurred while submitting the profile.")
+    finally:
+        conn.close()
+
+    return redirect(url_for('view_repository'))
+
+@app.route('/download_cv/<int:profile_id>')
+def download_cv(profile_id):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            # Fetch the CV data from the database
+            sql = "SELECT cv FROM job_profile WHERE profile_id = %s"
+            cursor.execute(sql, (profile_id,))
+            profile = cursor.fetchone()
+    finally:
+        connection.close()
+
+    if profile and profile['cv']:
+        # CV is stored as a binary object in the database
+        cv_data = profile['cv']
+        
+        # Check for PDF and DOC file types based on file signature (magic bytes)
+        if cv_data.startswith(b'%PDF'):
+            mime_type = 'application/pdf'
+            filename = 'resume.pdf'
+        elif cv_data[:2] == b'\xd0\xcf':  # DOC files start with 0xD0 0xCF (MS Word 97-2003 format)
+            mime_type = 'application/msword'
+            filename = 'resume.doc'
+        elif cv_data[:4] == b'PK\x03\x04':  # DOCX files start with 0x50 0x4B 0x03 0x04 (MS Word 2007+ format)
+            mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            filename = 'resume.docx'
+        else:
+            abort(400, description="Unsupported file type")
+
+        # Send the file without download (open in a new tab)
+        return send_file(io.BytesIO(cv_data), mimetype=mime_type, download_name=filename, as_attachment=False)
+    
+    flash('CV not found.')
+    return redirect(url_for('view_repository', profile_id=profile_id))
+
+
 
 
 if __name__ == '__main__':
