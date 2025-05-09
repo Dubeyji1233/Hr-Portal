@@ -10,8 +10,11 @@ import requests
 from datetime import datetime
 import io
 import pytz
+from pytz import timezone
 import logging
 from logging.handlers import RotatingFileHandler
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
 
 
 load_dotenv()
@@ -59,6 +62,7 @@ def build_auth_url():
 
 os.makedirs("logs", exist_ok=True)
 
+# For logging all the steps
 logger = logging.getLogger("AppLogger")
 logger.setLevel(logging.INFO)
 
@@ -67,6 +71,12 @@ if not logger.handlers:
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+
+# Background Schedular 
+scheduler = BackgroundScheduler()
+scheduler.start()
+atexit.register(lambda: scheduler.shutdown())
+
 
 # ------------------- Routes -------------------
 
@@ -208,6 +218,56 @@ def home():
         page=page
     )
 
+@app.route('/dashboard_data')
+def dashboard_data():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Step 1: Get all unique departments
+    cursor.execute("SELECT DISTINCT department FROM requisitions")
+    departments_result = cursor.fetchall()
+    departments = [row['department'] for row in departments_result]
+
+    openings = []
+    filled = []
+
+    # Step 2: For each department, get totals
+    for dept in departments:
+        cursor.execute("""
+            SELECT 
+                COALESCE(SUM(number_of_openings), 0) AS total_openings,
+                COALESCE(SUM(openings_filled), 0) AS total_filled
+            FROM requisitions
+            WHERE department = %s
+        """, (dept,))
+        result = cursor.fetchone()
+        openings.append(result['total_openings'])
+        filled.append(result['total_filled'])
+
+    # Chart 2: Assigned To-wise
+    cursor.execute("""
+        SELECT assigned_to,
+               COALESCE(SUM(number_of_openings), 0) AS total_openings,
+               COALESCE(SUM(openings_filled), 0) AS total_filled
+        FROM requisitions
+        GROUP BY assigned_to
+    """)
+    assigned_data = cursor.fetchall()
+    assigned_to = [row['assigned_to'] for row in assigned_data]
+    assigned_openings = [row['total_openings'] for row in assigned_data]
+    assigned_filled = [row['total_filled'] for row in assigned_data]
+
+    conn.close()
+
+    return jsonify({
+        'departments': departments,
+        'openings': openings,
+        'filled': filled,
+        'assigned_to': assigned_to,
+        'assigned_openings': assigned_openings,
+        'assigned_filled': assigned_filled
+    })
+
 # ------------------------------------------------------------------------------------#
 @app.route('/submit_requisition', methods=['POST'])
 def submit_requisition():
@@ -291,6 +351,8 @@ Skills Required: {requisition_data['skills_required']}
 Location: {requisition_data['location']}
 Budget: {requisition_data['budget']}
 Type: {requisition_data['hiring_type']}
+
+Please revert back within 1 day if any missing information.
 
 Regards,
 {user['name']}
@@ -391,6 +453,18 @@ def view_requisitions():
 
     try:
         with conn.cursor() as cursor:
+            # 🔁 Update status column based on current openings_filled vs number_of_openings
+            cursor.execute("""
+                UPDATE requisitions
+                SET status = CASE
+                    WHEN openings_filled = number_of_openings THEN 'Closed'
+                    ELSE 'Open'
+                END
+            """)
+            conn.commit()
+            logging.info("Requisition statuses updated based on openings_filled")
+
+            # Fetch requisitions
             if user['role'] in ['admin', 'hr lead']:
                 logging.info(f"{user['email']} fetching all requisitions (Role: {user['role']})")
                 cursor.execute("""
@@ -403,8 +477,8 @@ def view_requisitions():
             else:
                 logging.info(f"{user['email']} fetching assigned requisitions")
                 cursor.execute("""
-                    SELECT r.id, r.job_title, r.department, r.created_at,r.created_by,
-                           r.assigned_to, u1.name AS created_by_name, u2.name AS assigned_to_name
+                    SELECT r.id, r.job_title, r.department, r.created_at, r.created_by,
+                           r.assigned_to, r.status, u1.name AS created_by_name, u2.name AS assigned_to_name
                     FROM requisitions r
                     LEFT JOIN users u1 ON r.created_by = u1.email
                     LEFT JOIN users u2 ON r.assigned_to = u2.email
@@ -420,6 +494,7 @@ def view_requisitions():
         conn.close()
 
     return render_template('view_requisitions.html', requisitions=requisitions, user=user)
+
 
 
 # ------------------------------------------------------------------------------------#
@@ -477,6 +552,137 @@ def view_requisition_details(requisition_id):
         conn.close()
 
     return render_template('requisition_details.html', requisition=requisition, hr_users=hr_users, user=user)
+
+@app.route('/requisition/<int:requisition_id>/edit', methods=['GET', 'POST'])
+def edit_requisition(requisition_id):
+    user = session.get('user')
+    conn = get_db_connection()
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            if request.method == 'POST':
+                form = request.form
+                cursor.execute("""
+                    UPDATE requisitions SET
+                        job_title = %s, department = %s, number_of_openings = %s,
+                        skills_required = %s, location = %s, hiring_type = %s,
+                        budget = %s, job_description = %s
+                    WHERE id = %s
+                """, (
+                    form['job_title'], form['department'], form['number_of_openings'],
+                    form['skills_required'], form['location'], form['hiring_type'],
+                    form['budget'], form['job_description'], requisition_id
+                ))
+                conn.commit()
+                flash("Requisition updated successfully!", "success")
+                return redirect(url_for('view_requisition', requisition_id=requisition_id))
+
+            # GET request – fetch requisition
+            cursor.execute("SELECT * FROM requisitions WHERE id = %s", (requisition_id,))
+            requisition = cursor.fetchone()
+    except Exception as e:
+        logger.error(f"Error in edit_requisition: {e}")
+        flash("Something went wrong while editing the requisition.", "danger")
+        return redirect(url_for('home'))
+    finally:
+        conn.close()
+
+    return render_template("edit_requisition.html", requisition=requisition, user=user)
+
+@app.route('/update_comments/<int:requisition_id>', methods=['POST'])
+def update_comments(requisition_id):
+    comments = request.form.get('comments')
+    user = session.get("user")
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        # Update comments
+        cursor.execute("UPDATE requisitions SET comments = %s WHERE id = %s", (comments, requisition_id))
+        conn.commit()
+
+        logger.info(f"Comments updated for requisition ID {requisition_id} by user {user['email'] if user else 'Unknown'}. Comment: {comments}")
+
+        # Fetch updated requisition data
+        cursor.execute("SELECT * FROM requisitions WHERE id = %s", (requisition_id,))
+        requisition = cursor.fetchone()
+
+    except Exception as e:
+        logger.error(f"Error updating comments for requisition ID {requisition_id}: {str(e)}")
+        flash("An error occurred while updating comments.", "danger")
+        conn.rollback()
+        return redirect(url_for('edit_requisition', requisition_id=requisition_id))
+    
+    finally:
+        conn.close()
+
+    # Send email to the 'created_by' user
+    success, msg = send_comment_update_email(requisition)
+
+    if success:
+        logger.info(f"Comment update email sent successfully to {requisition['created_by']} for requisition ID {requisition_id}")
+    else:
+        logger.error(f"Failed to send comment update email for requisition ID {requisition_id}: {msg}")
+
+    flash("Comments updated successfully." + (" Email sent." if success else " " + msg), "success" if success else "danger")
+    return redirect(url_for('edit_requisition', requisition_id=requisition_id))
+
+
+def send_comment_update_email(requisition_data):
+    access_token = session.get("access_token")
+    user = session.get("user")
+
+    if not access_token or not user:
+        logger.error("Attempted to send comment update email without authentication.")
+        return False, "User not authenticated."
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    email_body = f"""
+Hi {requisition_data['created_by']},
+
+Your requisition for the position "{requisition_data['job_title']}" has been updated with the following comment:
+
+------------------------------------------------------
+{requisition_data['comments']}
+------------------------------------------------------
+
+Updated by: {user['name']} ({user['email']})
+
+Regards,
+HR System
+"""
+
+    message = {
+        "message": {
+            "subject": f"Comment Added to Requisition - {requisition_data['job_title']}",
+            "body": {
+                "contentType": "Text",
+                "content": email_body
+            },
+            "toRecipients": [
+                {"emailAddress": {"address": requisition_data['created_by']}}
+            ]
+        },
+        "saveToSentItems": "true"
+    }
+
+    response = requests.post(
+        'https://graph.microsoft.com/v1.0/me/sendMail',
+        headers=headers,
+        json=message
+    )
+
+    if response.status_code == 202:
+        logger.info(f"Comment update email sent to {requisition_data['created_by']}")
+        return True, "Email sent successfully"
+    else:
+        logger.error(f"Failed to send comment update email: {response.text}")
+        return False, f"Failed to send email: {response.text}"
+
 
 
 
@@ -564,7 +770,7 @@ def submit_candidate():
         total_exp = request.form['total_exp']
         current_loc = request.form['current_loc']
         current_ctc = request.form['current_ctc']
-        expected_ctc = request.form['expected_ctc']
+        exp_ctc = request.form['exp_ctc']
         source = request.form['source']
         
         allowed_ids = [str(r['id']) for r in requisitions]
@@ -578,10 +784,10 @@ def submit_candidate():
         with connection.cursor() as cursor:
             cursor.execute("""
                 INSERT INTO candidates (name, email, phone, skills, requisition_id, resume, submitted_by, total_exp,
-                           current_loc, current_ctc, expected_ctc, source)
+                           current_loc, current_ctc, exp_ctc, source)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (name, email, phone, skills, requisition_id, resume_blob, user_id, total_exp, current_loc, current_ctc,
-                  expected_ctc, source))
+                  exp_ctc, source))
             connection.commit()
         connection.close()
         logging.info(f"Candidate {name} submitted successfully by {user_id}")
@@ -644,15 +850,43 @@ def update_selection_status(candidate_id):
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("UPDATE candidates SET selection_status = %s WHERE id = %s", (new_status, candidate_id))
-        conn.commit()
-        logging.info(f"Updated selection status of candidate {candidate_id} to '{new_status}'")
-        return jsonify({'success': True})
+            # Get current selection_status and requisition_id of candidate
+            cursor.execute("SELECT selection_status, requisition_id FROM candidates WHERE id = %s", (candidate_id,))
+            result = cursor.fetchone()
+
+            if not result:
+                logging.warning(f"No candidate found with ID {candidate_id}")
+                return jsonify({'success': False, 'message': 'Candidate not found'})
+
+            current_status = result['selection_status']
+            requisition_id = result['requisition_id']
+
+            # Update selection_status only if it's changing
+            if current_status != new_status:
+                cursor.execute(
+                    "UPDATE candidates SET selection_status = %s WHERE id = %s",
+                    (new_status, candidate_id)
+                )
+
+                # Only increment openings_filled if changing from non-Selected to Selected
+                if new_status == 'selected' and current_status != 'selected':
+                    cursor.execute("""
+                        UPDATE requisitions
+                        SET openings_filled = openings_filled + 1
+                        WHERE id = %s AND openings_filled < number_of_openings
+                    """, (requisition_id,))
+
+            conn.commit()
+            logging.info(f"Updated candidate {candidate_id} status from '{current_status}' to '{new_status}'")
+            return jsonify({'success': True})
+
     except Exception as e:
+        conn.rollback()
         logging.exception(f"Failed to update selection status for candidate {candidate_id}")
-        return jsonify({'success': False})
+        return jsonify({'success': False, 'message': 'Database error'})
     finally:
         conn.close()
+
 
 
 @app.route('/update_onboarding/<int:candidate_id>', methods=['POST'])
@@ -980,7 +1214,6 @@ def schedule_interview(candidate_id):
     connection = get_db_connection()
     cursor = connection.cursor(pymysql.cursors.DictCursor)
 
-    # Fetch scheduled interviews with status
     cursor.execute("""
         SELECT level, interview_datetime, status FROM interview_schedule
         WHERE candidate_id = %s
@@ -999,7 +1232,6 @@ def schedule_interview(candidate_id):
 
         logger.info(f"Scheduling interview: candidate {candidate_id}, level {level}, datetime {interview_datetime_str}")
 
-        # 🧠 Check if previous level is completed (except for level 1)
         if level > 1:
             previous = scheduled_interviews.get(level - 1)
             if not previous or previous['status'] != 'completed':
@@ -1007,7 +1239,6 @@ def schedule_interview(candidate_id):
                 flash(f"You must complete Level {level - 1} before scheduling Level {level}.", "danger")
                 return redirect(request.url)
 
-        # Fetch interviewer info from hierarchy
         cursor.execute("""
             SELECT ih.*, c.email as candidate_email, c.name as candidate_name
             FROM interview_hierarchy ih
@@ -1021,7 +1252,6 @@ def schedule_interview(candidate_id):
             flash('Invalid level or candidate', 'danger')
             return redirect(request.url)
 
-        # Insert or update interview_schedule
         cursor.execute("""
             INSERT INTO interview_schedule (candidate_id, level, interview_datetime, interviewer_name, interviewer_email, status)
             VALUES (%s, %s, %s, %s, %s, 'pending')
@@ -1029,7 +1259,6 @@ def schedule_interview(candidate_id):
         """, (candidate_id, level, interview_datetime_str, result['interviewer_name'], result['interviewer_email']))
         connection.commit()
 
-        # Teams Invite
         access_token = session.get('access_token')
         try:
             send_teams_invite(
@@ -1045,13 +1274,28 @@ def schedule_interview(candidate_id):
             logger.info(f"Teams invite sent to {result['interviewer_email']} and {result['candidate_email']}")
         except Exception as e:
             logger.exception("Error sending Teams invite")
-            print("Error sending invite:", e)
             flash("Interview scheduled, but failed to send Teams invite.", "warning")
+
+        # ✅ Schedule one-time reminder exactly 5 mins after interview start
+        reminder_time = interview_datetime + timedelta(minutes=5)
+        job_id = f"reminder_{candidate_id}_{level}"
+
+        try:
+            scheduler.add_job(
+                func=send_interview_feedback_reminder,
+                trigger='date',
+                run_date=reminder_time,
+                args=[candidate_id, level, access_token],
+                id=job_id,
+                replace_existing=True
+            )
+            logger.info(f"Scheduled reminder job {job_id} at {reminder_time}")
+        except Exception as e:
+            logger.error(f"Failed to schedule reminder job {job_id}: {e}")
 
         flash(f"Interview for Level {level} scheduled successfully.", "success")
         return redirect(url_for('schedule_interview', candidate_id=candidate_id))
 
-    # GET request
     return render_template(
         'schedule_interview.html',
         candidate_id=candidate_id,
@@ -1336,6 +1580,130 @@ def download_cv(profile_id):
     
     flash('CV not found.')
     return redirect(url_for('view_repository', profile_id=profile_id))
+
+def send_joining_reminder():
+    conn = get_db_connection()
+    today_plus_7 = (datetime.today() + timedelta(days=7)).date()
+
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT c.name AS candidate_name, c.planned_joining_date, r.job_title,
+                       u1.email AS created_by_email, u2.email AS assigned_to_email
+                FROM candidates c
+                JOIN requisitions r ON c.requisition_id = r.id
+                LEFT JOIN users u1 ON r.created_by = u1.email
+                LEFT JOIN users u2 ON r.assigned_to = u2.email
+                WHERE c.planned_joining_date = %s
+            """, (today_plus_7,))
+            candidates = cursor.fetchall()
+
+            for c in candidates:
+                for recipient in [c['created_by_email'], c['assigned_to_email']]:
+                    if recipient:
+                        _send_email_to_user(
+                            recipient,
+                            subject="Upcoming Candidate Joining Reminder",
+                            body=f"""
+Hi,
+
+This is a reminder that candidate {c['candidate_name']} is expected to join for the position of {c['job_title']} on {c['planned_joining_date']}.
+
+Please ensure all arrangements are in place.
+
+Regards,
+HR Team
+                            """
+                        )
+
+    except Exception as e:
+        logger.error(f"Error sending joining reminders: {e}")
+    finally:
+        conn.close()
+
+
+def _send_email_to_user(email, subject, body, access_token):
+    if not access_token:
+        logger.error("Access token not provided.")
+        return
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    message = {
+        "message": {
+            "subject": subject,
+            "body": {
+                "contentType": "Text",
+                "content": body
+            },
+            "toRecipients": [
+                {"emailAddress": {"address": email}}
+            ]
+        },
+        "saveToSentItems": "true"
+    }
+
+    response = requests.post(
+        'https://graph.microsoft.com/v1.0/users/otpluat@orientindia.net/sendMail',
+        headers=headers,
+        json=message
+    )
+
+    if response.status_code == 202:
+        logger.info(f"Reminder email sent to {email}")
+    else:
+        logger.error(f"Failed to send reminder email to {email}: {response.text}")
+
+
+
+ #------ TAT for interviewer to submit the ratings -------#
+
+def send_interview_feedback_reminder(candidate_id, level, access_token):
+    logger.info("Reminder triggered for candidate ID %s, level %s at %s", candidate_id, level, datetime.now())
+
+    india_tz = timezone('Asia/Kolkata')
+    now = datetime.now(india_tz)
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        cursor.execute("""
+            SELECT i.id, i.candidate_id, i.interviewer_email, i.interviewer_name,
+                   i.interview_datetime, c.name AS candidate_name, r.job_title
+            FROM interview_schedule i
+            JOIN candidates c ON i.candidate_id = c.id
+            JOIN requisitions r ON c.requisition_id = r.id
+            WHERE i.candidate_id = %s AND i.level = %s AND i.status = 'completed'
+        """, (candidate_id, level))
+
+        interview = cursor.fetchone()
+        if interview and interview['interviewer_email']:
+            _send_email_to_user(
+                email=interview['interviewer_email'],
+                subject="Interview Feedback Reminder",
+                body=f"""
+Hi {interview['interviewer_name']},
+
+This is a gentle reminder to submit your feedback for the interview you conducted with candidate **{interview['candidate_name']}** for the position of **{interview['job_title']}** on **{interview['interview_datetime'].strftime('%Y-%m-%d %H:%M')}**.
+
+Please log in to the system and submit your feedback. Please ignore if already submitted.
+
+Regards,  
+HR Team
+                """,
+                access_token=access_token
+            )
+            logger.info("Reminder sent to %s", interview['interviewer_email'])
+        else:
+            logger.info("No reminder sent. Interview not marked as completed or email missing.")
+    except Exception as e:
+        logger.error("Error sending interview feedback reminder: %s", e)
+    finally:
+        conn.close()
+
 
 
 

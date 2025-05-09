@@ -8,6 +8,7 @@
             <strong>Assigned to:</strong> {{ requisition.assigned_to_name }} ({{ requisition.assigned_to }})
         </div>
     {% else %}
+        <!-- HR Assignment Form -->
         <form method="POST">
             <div class="form-group">
                 <label for="assigned_to">Select HR:</label>
@@ -23,6 +24,17 @@
     {% endif %}
 </div>
 
+<!-- Comments Form - Always visible -->
+<div class="mt-4">
+    <h4>Comments</h4>
+    <form method="POST" action="{{ url_for('update_comments', requisition_id=requisition.id) }}">
+        <div class="form-group">
+            <textarea class="form-control" name="comments" rows="4" placeholder="Add comments...">{{ requisition.comments or '' }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-info mt-2">Update Comments</button>
+    </form>
+</div>
+
 <div class="container mt-4">
     <h3>Requisition Details</h3>
     <table class="table table-bordered">
@@ -34,5 +46,6 @@
         {% endfor %}
     </table>
     <a href="{{ url_for('view_requisitions') }}" class="btn btn-secondary">Back</a>
+    <a href="{{ url_for('edit_requisition', requisition_id=requisition.id) }}" class="btn btn-primary">Edit</a>
 </div>
 {% endblock %}

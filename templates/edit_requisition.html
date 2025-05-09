@@ -1,0 +1,50 @@
+{% extends "home.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h3>Edit Requisition</h3>
+    <form method="POST">
+        <div class="form-group">
+            <label>Job Title</label>
+            <input type="text" name="job_title" value="{{ requisition.job_title }}" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label>Department</label>
+            <input type="text" name="department" value="{{ requisition.department }}" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label>Number of Openings</label>
+            <input type="number" name="number_of_openings" value="{{ requisition.number_of_openings }}" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label>Skills Required</label>
+            <input type="text" name="skills_required" value="{{ requisition.skills_required }}" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label>Location</label>
+            <input type="text" name="location" value="{{ requisition.location }}" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label>Hiring Type</label>
+            <input type="text" name="hiring_type" value="{{ requisition.hiring_type }}" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label>Budget</label>
+            <input type="text" name="budget" value="{{ requisition.budget }}" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+            <label>Job Description</label>
+            <textarea name="job_description" class="form-control" required>{{ requisition.job_description }}</textarea>
+        </div>
+
+        <button type="submit" class="btn btn-success">Update</button>
+        <a href="{{ url_for('view_requisitions', requisition_id=requisition.id) }}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}
