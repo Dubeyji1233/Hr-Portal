@@ -749,3 +749,19 @@ information about how to avoid this problem.
 2025-05-09 11:19:39,102 - INFO - SSO user found in database: otpluat@orientindia.net
 2025-05-09 11:19:39,102 - INFO - Session created for: otpluat@orientindia.net
 2025-05-09 11:19:39,123 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-05-12 11:28:11,029 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-05-12 14:31:23,471 - INFO - SSO login initiated
+2025-05-12 14:31:27,876 - INFO - Received authorization code from Azure
+2025-05-12 14:31:28,374 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-05-12 14:31:28,374 - INFO - Session created for: otpluat@orientindia.net
+2025-05-12 14:31:28,395 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-05-13 09:38:42,912 - WARNING - Unauthorized access to /home. Redirecting to login.
+2025-05-13 09:38:44,252 - INFO - SSO login initiated
+2025-05-13 09:38:44,882 - INFO - Received authorization code from Azure
+2025-05-13 09:38:45,400 - INFO - SSO user found in database: otpluat@orientindia.net
+2025-05-13 09:38:45,400 - INFO - Session created for: otpluat@orientindia.net
+2025-05-13 09:38:45,761 - INFO - User 'otpluat@orientindia.net' with role 'admin' accessed /home with page: dashboard
+2025-05-13 09:39:29,474 - INFO - Comments updated for requisition ID 3 by user otpluat@orientindia.net. Comment: Provide detailed JD
+2025-05-13 09:39:29,474 - WARNING - TAT breached for requisition ID 3 by deepa@orientindia.net
+2025-05-13 09:39:29,883 - INFO - Comment update email sent to otpluat@orientindia.net
+2025-05-13 09:39:29,883 - INFO - Comment update email sent successfully to otpluat@orientindia.net for requisition ID 3

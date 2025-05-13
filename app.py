@@ -588,17 +588,40 @@ def edit_requisition(requisition_id):
 
     return render_template("edit_requisition.html", requisition=requisition, user=user)
 
+# Helper function to check TAT breach
+def check_tat_breach(requisition):
+    created_at = requisition.get("created_at")
+    comments_updated_at = requisition.get("comments_updated_at")
+
+    if not created_at or not comments_updated_at:
+        return False  # Cannot check
+
+    # Convert to datetime if strings
+    if isinstance(created_at, str):
+        created_at = datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S")
+    if isinstance(comments_updated_at, str):
+        comments_updated_at = datetime.strptime(comments_updated_at, "%Y-%m-%d %H:%M:%S")
+
+    time_diff = comments_updated_at - created_at
+    return time_diff > timedelta(days=1)
+
 @app.route('/update_comments/<int:requisition_id>', methods=['POST'])
 def update_comments(requisition_id):
+    from datetime import datetime
+
     comments = request.form.get('comments')
     user = session.get("user")
 
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     try:
-        # Update comments
-        cursor.execute("UPDATE requisitions SET comments = %s WHERE id = %s", (comments, requisition_id))
+        # Update comments and timestamp
+        cursor.execute("""
+            UPDATE requisitions 
+            SET comments = %s, comments_updated_at = %s 
+            WHERE id = %s
+        """, (comments, datetime.now(), requisition_id))
         conn.commit()
 
         logger.info(f"Comments updated for requisition ID {requisition_id} by user {user['email'] if user else 'Unknown'}. Comment: {comments}")
@@ -607,12 +630,16 @@ def update_comments(requisition_id):
         cursor.execute("SELECT * FROM requisitions WHERE id = %s", (requisition_id,))
         requisition = cursor.fetchone()
 
+        # Check for TAT breach
+        if requisition and check_tat_breach(requisition):
+            logger.warning(f"TAT breached for requisition ID {requisition_id} by {requisition.get('assigned_to')}")
+
     except Exception as e:
         logger.error(f"Error updating comments for requisition ID {requisition_id}: {str(e)}")
         flash("An error occurred while updating comments.", "danger")
         conn.rollback()
         return redirect(url_for('edit_requisition', requisition_id=requisition_id))
-    
+
     finally:
         conn.close()
 
@@ -626,6 +653,7 @@ def update_comments(requisition_id):
 
     flash("Comments updated successfully." + (" Email sent." if success else " " + msg), "success" if success else "danger")
     return redirect(url_for('edit_requisition', requisition_id=requisition_id))
+
 
 
 def send_comment_update_email(requisition_data):
