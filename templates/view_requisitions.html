@@ -62,6 +62,7 @@
                 <th>Requested By</th>
                 <th>Date</th>
                 <th>View Details</th>
+                <th>Openings</th>
                 <th>Status</th> <!-- Optional column -->
             </tr>
         </thead>
@@ -78,7 +79,16 @@
                         View Details
                     </a>
                 </td>
-                <td>{{ req.status }}</td> <!-- Can remove this if not used -->
+                <td>{{ req.openings_filled }}/{{ req.number_of_openings }}</td>
+                <td>
+                    {% if req.status == 'Open' %}
+                        <span class="badge bg-success">{{ req.status }}</span>
+                    {% elif req.status == 'Closed' %}
+                        <span class="badge bg-danger">{{ req.status }}</span>
+                    {% else %}
+                        {{ req.status }}
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
