@@ -33,7 +33,7 @@
     }
 </style>
 
-<div class="container mt-4">
+<!--<div class="container mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         <div class="row justify-content-center">
@@ -48,7 +48,7 @@
         </div>
       {% endif %}
     {% endwith %}
-</div>
+</div> -->
 
 <h2>User Management</h2>
 
@@ -91,8 +91,10 @@
                         <select name="role" class="form-select form-select-sm me-2">
                             <option value="Admin" {% if user.role == 'Admin' %}selected{% endif %}>Admin</option>
                             <option value="HR" {% if user.role == 'HR' %}selected{% endif %}>HR</option>
+                            <option value="hr lead" {% if user.role == 'hr lead' %}selected{% endif %}>HR Lead</option>
                             <option value="Manager" {% if user.role == 'Manager' %}selected{% endif %}>Manager</option>
-                            <option value="Employee" {% if user.role == 'Employee' %}selected{% endif %}>Employee</option>
+                            <option value="Interviewer" {% if user.role == 'Interviewer' %}selected{% endif %}>Interviewer</option>
+							<option value="Requestor" {% if user.role == 'Requestor' %}selected{% endif %}>Requestor</option>
                         </select>
                         <button type="submit" class="btn btn-primary btn-sm">Update</button>
                     </form>

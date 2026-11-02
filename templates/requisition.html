@@ -1,258 +1,436 @@
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+
 <style>
-  body {
-    margin: 0;
-    font-family: 'Segoe UI', sans-serif;
-    background-color: #f5f5f5;
-  }
-  .requisition-form {
-    max-width: 1000px;
-    margin: 0 auto 20px auto;
-    padding: 25px;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 0 15px rgba(0,0,0,0.1);
-  }
+  .req-card { background: #ffffff; border: 1px solid var(--border-color, #e3e8ef); border-radius: 14px; padding: 32px; box-shadow: 0 2px 12px rgba(10, 25, 48, 0.04); max-width: 1000px; margin: 0 auto 30px auto; }
+  .req-card h2 { font-size: 1.4rem; font-weight: 700; color: var(--ink-900, #0a1930); margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color, #e3e8ef); }
+  .section-label { font-size: 0.9rem; font-weight: 700; color: var(--ink-900, #0a1930); margin: 28px 0 14px 0; display: flex; align-items: center; gap: 8px; }
+  .form-group label { font-weight: 600; font-size: 0.825rem; color: var(--text-main, #16233d); margin-bottom: 6px; display: block; }
+  .required-asterisk { color: #dc3545; margin-left: 2px; }
+  .form-control, .form-select { border: 1px solid var(--border-color, #e3e8ef); border-radius: 8px; padding: 10px 14px; font-size: 0.9rem; color: var(--text-main, #16233d); transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+  .form-control:focus, .form-select:focus { border-color: var(--brass-500, #c6a15b); box-shadow: 0 0 0 3px rgba(198, 161, 91, 0.15); }
+  .ts-control { border-radius: 8px !important; padding: 10px 14px !important; border-color: var(--border-color, #e3e8ef) !important; }
+  .level-block { background: #f8fafc; border: 1px solid var(--border-color, #e3e8ef); padding: 18px; margin-top: 12px; border-radius: 10px; position: relative; }
+  .level-block strong { color: var(--ink-800, #0f2547); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .remove-btn { position: absolute; top: 12px; right: 12px; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 6px; width: 28px; height: 28px; font-size: 16px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
+  .remove-btn:hover { background: #dc2626; color: #ffffff; }
+  .btn-add-dyn { background: rgba(198, 161, 91, 0.1); color: #8a6a2f; border: 1px dashed var(--brass-500, #c6a15b); border-radius: 8px; padding: 8px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
+  .btn-add-dyn:hover { background: var(--brass-500, #c6a15b); color: #ffffff; }
+  .fancy-btn { padding: 12px 32px; font-size: 0.925rem; font-weight: 600; color: #ffffff; background: linear-gradient(135deg, var(--ink-800, #0f2547), var(--ink-900, #0a1930)); border: 1px solid var(--brass-500, #c6a15b); border-radius: 30px; box-shadow: 0 4px 12px rgba(10, 25, 48, 0.15); transition: all 0.25s ease; display: inline-flex; align-items: center; justify-content: center; }
+  .fancy-btn:hover:not(:disabled) { box-shadow: 0 6px 18px rgba(10, 25, 48, 0.25); transform: translateY(-1px); }
+  .fancy-btn:disabled { opacity: 0.75; cursor: not-allowed; }
+  .loader { border: 2px solid rgba(255, 255, 255, 0.3); border-top: 2px solid #ffffff; border-radius: 50%; width: 14px; height: 14px; animation: spin 0.8s linear infinite; display: inline-block; margin-right: 8px; }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  .hidden { display: none !important; }
 
-  .requisition-form h2 {
-    margin-bottom: 20px;
-    text-align: center;
-    color: #333;
-  }
-
-  .form-row {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-  }
-
-  .form-group {
-    flex: 1;
-    min-width: 220px;
-    margin-bottom: 15px;
-  }
-
-  label {
-    font-weight: bold;
-    display: block;
-    margin-bottom: 5px;
-  }
-
-  input[type="text"],
-  input[type="number"],
-  input[type="email"],
-  textarea,
-  select {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    box-sizing: border-box;
-  }
-
-  button {
-    background: #007bff;
-    color: white;
-    padding: 10px 16px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    margin-top: 10px;
-  }
-
-  button:hover {
-    background: #0056b3;
-  }
-
-  .level-block {
-    border: 1px dashed #aaa;
-    padding: 15px;
-    margin-top: 10px;
-    border-radius: 8px;
-    position: relative;
-  }
-
-  .remove-btn {
-    position: absolute;
-    top: 8px;
-    right: 10px;
-    background: crimson;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    font-size: 14px;
-    cursor: pointer;
-  }
-
-  .hierarchy-row {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-  }
-
-  .hierarchy-row .form-group {
-    flex: 1;
-  }
-  .fancy-btn {
-  display: inline-block;
-  padding: 8px 18px;
-  font-size: 14px;
-  font-weight: 600;
-  color: white;
-  background: linear-gradient(135deg, #007bff, #0056b3);
-  border: none;
-  border-radius: 25px;
-  text-decoration: none;
-  box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2);
-  transition: all 0.3s ease;
-  }
-
-  .fancy-btn:hover {
-    background: linear-gradient(135deg, #0056b3, #007bff);
-    box-shadow: 0 6px 15px rgba(0, 123, 255, 0.35);
-    text-decoration: none;
-    transform: translateY(-1px);
-  }
+  /* Assessment UI Styles */
+  .assessment-question-item { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #f1f5f9; }
+  .assessment-question-item input[type="checkbox"] { width: 18px; height: 18px; margin-top: 3px; cursor: pointer; }
+  .selected-question-row { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 8px; }
+  .btn-remove-q { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 6px; padding: 4px 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+  .btn-remove-q:hover { background: #dc2626; color: #fff; }
 </style>
 
-
-
-<!-- Requisition Form -->
-<form method="POST" action="{{ url_for('submit_requisition') }}" class="requisition-form">
-<!--  <div style="text-align: right; margin-bottom: 10px;">-->
-<!--    <a href="{{ url_for('home') }}?page=view_requisitions" class="fancy-btn">View Submitted Requisitions</a>-->
-<!--  </div>-->
+<div class="req-card">
   <h2>Create New Requisition</h2>
 
+  <form method="POST" action="{{ url_for('submit_requisition') }}" id="requisitionForm">
+    <select id="dept-options-template" style="display:none;">
+      <option value="">-- Select Department --</option>
+      {% for dept in departments %}<option value="{{ dept }}">{{ dept }}</option>{% endfor %}
+    </select>
 
+    <div class="row g-3 mb-3">
+      <div class="col-md-6 form-group">
+        <label>Job Title <span class="required-asterisk">*</span></label>
+        <input type="text" name="job_title" class="form-control" required>
+      </div>
+      <div class="col-md-6 form-group">
+        <label for="department">Department <span class="required-asterisk">*</span></label>
+        <select name="department" id="department" class="form-select search-select" required>
+            <option value="">-- Select Department --</option>
+            {% for dept in departments %}<option value="{{ dept }}">{{ dept }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
 
-  <div class="form-row">
-    <div class="form-group">
-      <label>Job Title</label>
-      <input type="text" name="job_title" required>
+    <div class="row g-3 mb-3">
+      <div class="col-md-4 form-group">
+        <label>Number of Openings <span class="required-asterisk">*</span></label>
+        <input type="number" name="number_of_openings" min="1" value="1" class="form-control" required>
+      </div>
+      <div class="col-md-4 form-group">
+        <label>Customer Name <span class="required-asterisk">*</span></label>
+        <input list="customer-list" name="customer_name" class="form-control" placeholder="Select or type new customer" required>
+        <datalist id="customer-list">
+            {% for cust in customers %}<option value="{{ cust }}">{% endfor %}
+        </datalist>
+      </div>
+      <div class="col-md-4 form-group">
+        <label>Skills Required <span class="required-asterisk">*</span></label>
+        <input type="text" name="skills_required" class="form-control" required>
+      </div>
     </div>
-<!--    <div class="form-group">-->
-<!--      <label>Department</label>-->
-<!--      <input type="text" name="department" required>-->
-<!--    </div>-->
-  </div>
 
-  <div class="form-row">
-    <div class="form-group">
-      <label>Number of Openings</label>
-      <input type="number" name="number_of_openings" min="1" required>
+    <div class="row g-3 mb-3">
+      <div class="col-md-4 form-group">
+        <label>Location <span class="required-asterisk">*</span></label>
+        <input type="text" name="location" class="form-control" required>
+      </div>
+      <div class="col-md-4 form-group">
+        <label>Total Budget <span class="required-asterisk">*</span></label>
+        <input type="number" name="budget" step="any" min="0" class="form-control" required>
+      </div>
+      <div class="col-md-4 form-group">
+        <label>Replacement / New Hiring <span class="required-asterisk">*</span></label>
+        <select id="hiring_type" name="hiring_type" class="form-select" required onchange="toggleReplacementField()">
+          <option value="New">New</option>
+          <option value="Replacement">Replacement</option>
+        </select>
+      </div>
+      <div class="col-md-12 form-group" id="replacement-person-group" style="display:none;">
+        <label>Replacement For (Optional)</label>
+        <input type="text" name="replacement_for" class="form-control" placeholder="Enter name of person">
+      </div>
     </div>
-    <div class="form-group">
-      <label>Skills Required</label>
-      <input type="text" name="skills_required" required>
-    </div>
-  </div>
 
-  <div class="form-row">
-    <div class="form-group">
-      <label>Location</label>
-      <input type="text" name="location" required>
+    <!-- NEW FIELDS ROW -->
+    <div class="row g-3 mb-3">
+      <div class="col-md-4 form-group">
+        <label>Experience Required <span class="required-asterisk">*</span></label>
+        <input type="text" name="experience_required" class="form-control" placeholder="e.g., 3-5 Years" required>
+      </div>
+      <div class="col-md-4 form-group">
+        <label>Work Type <span class="required-asterisk">*</span></label>
+        <select name="work_location_type" class="form-select" required>
+          <option value="">-- Select Work Type --</option>
+          <option value="Onsite">Onsite</option>
+          <option value="Hybrid">Hybrid</option>
+          <option value="Remote">Remote</option>
+        </select>
+      </div>
     </div>
-    <div class="form-group">
-      <label>Budget</label>
-      <input type="number" name="budget"  step="10000" min="10000" required>
-    </div>
-    <div class="form-group">
-      <label>Replacement / New Hiring</label>
-      <select name="hiring_type" required>
-        <option value="Replacement">Replacement</option>
-        <option value="New">New Hiring</option>
-      </select>
-    </div>
-  </div>
 
-  <div class="form-row">
-    <div class="form-group">
-      <label>Job Description</label>
-      <textarea name="job_description" rows="4" style="resize: vertical;" required></textarea>
+    <div class="mb-3 form-group">
+      <label>Job Description <span class="required-asterisk">*</span></label>
+      <textarea name="job_description" rows="4" class="form-control" style="resize: vertical;" required></textarea>
     </div>
-  </div>
 
-  <label style="margin-top: 20px;">Interview Hierarchy</label>
-  <div id="hierarchy-container"></div>
-  <input type="hidden" name="levels" id="levels" value="0">
-  <button type="button" onclick="addLevel()">+ Add Interview Level</button>
+    <!-- NEW SCREENING QUESTIONS -->
+    <div class="mb-3 form-group">
+      <label>Screening Questions (Optional)</label>
+      <textarea name="screening_questions" rows="3" class="form-control" placeholder="e.g., Do you have a valid passport? | Are you willing to relocate?"></textarea>
+      <div class="form-text text-muted" style="font-size: 0.75rem;">Separate multiple questions with a pipe character ( | ).</div>
+    </div>
 
-  <br><br>
-  <div style="text-align: center; margin-top: 20px;">
-    <button type="submit" class="fancy-btn">Submit Requisition</button>
-  </div>
-</form>
+    <div class="row g-3 mb-4">
+      <div class="col-md-6 form-group">
+        <label>PO Value (Optional)</label>
+        <input type="number" name="po_value" step="any" min="0" class="form-control">
+      </div>
+    </div>
+
+    <div class="section-label">Interview Hierarchy</div>
+    <div id="hierarchy-container"></div>
+    <input type="hidden" name="levels" id="levels" value="0">
+    <button type="button" class="btn-add-dyn mt-2" onclick="addLevel()">+ Add Interview Level</button>
+
+    <div class="section-label">Utilization by Department</div>
+    <div id="utilization-container"></div>
+    <input type="hidden" name="utilization_levels" id="utilization_levels" value="0">
+    <button type="button" class="btn-add-dyn mt-2" onclick="addUtilization()">+ Add Utilization</button>
+
+    <!-- LEVEL 2 ASSESSMENT SECTION -->
+    <div class="section-label">Level 2 Assessment (Optional)</div>
+    <div class="level-block" style="padding: 20px;">
+        <div class="form-group mb-3">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <input type="checkbox" name="has_level_2" id="has_level_2" value="yes" style="width: 18px; height: 18px;" onchange="toggleLevel2Assessment()">
+                <span>Assign a specific Level 2 Assessment to this Requisition?</span>
+            </label>
+        </div>
+
+        <div id="level2-fields" style="display: none; background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #cbd5e1;">
+            <div class="row g-3 mb-3">
+                <div class="col-md-4 form-group">
+                    <label>Assessment Title <span class="required-asterisk">*</span></label>
+                    <input type="text" name="assessment_title" id="assessment_title" class="form-control" placeholder="e.g., Level 2 Technical Test">
+                </div>
+                <div class="col-md-4 form-group">
+                    <label>Duration (Minutes) <span class="required-asterisk">*</span></label>
+                    <input type="number" name="assessment_duration" id="assessment_duration" class="form-control" value="30" min="1">
+                </div>
+                <div class="col-md-4 form-group">
+                    <label>Passing Rating / Mark <span class="required-asterisk">*</span></label>
+                    <input type="number" name="assessment_pass_rating" id="assessment_pass_rating" class="form-control" value="70" min="1">
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-6 form-group">
+                    <label>1. Select Folder</label>
+                    <select id="assessment_folder" class="form-select" onchange="populateExams()">
+                        <option value="">-- Select Folder --</option>
+                        {% for folder in question_folders %}
+                        <option value="{{ folder.folder_name }}">{{ folder.folder_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 form-group">
+                    <label>2. Select Exam / Chapter</label>
+                    <select id="assessment_exam" class="form-select" onchange="loadQuestions()">
+                        <option value="">-- Select Exam --</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="questions-list-container" style="display: none; margin-bottom: 25px;">
+                <label class="form-label mb-2" style="font-weight: 600;">3. Check Questions to Add:</label>
+                <div id="questions-list" style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; background: #f8fafc;"></div>
+                <div class="mt-3 text-end">
+                    <button type="button" class="btn btn-success" onclick="addSelectedToCart()" style="font-weight: 600;">+ Add Checked Questions to Assessment</button>
+                </div>
+            </div>
+
+            <div id="cart-container" style="display: none; border-top: 2px dashed #cbd5e1; padding-top: 20px;">
+                <label class="form-label mb-2" style="font-weight: 600; color: #1f9d55; font-size: 1.1rem;">4. Currently Selected Questions:</label>
+                <div id="cart-list"></div>
+                <div class="mt-2 text-start text-muted" style="font-size: 0.9rem;">
+                    Total Selected: <span id="cart_count" style="font-weight: bold; color: #1f9d55;">0</span> questions
+                </div>
+            </div>
+
+            <input type="hidden" name="selected_questions_json" id="selected_questions_json" value="[]">
+        </div>
+    </div>
+
+    <div class="text-center mt-5">
+      <button type="submit" class="fancy-btn" id="submitBtn">
+        <span id="btnLoader" class="loader hidden"></span>
+        <span id="btnText">Submit Requisition</span>
+      </button>
+    </div>
+  </form>
+</div>
 
 <script>
-  let level = 0;
+  function enableDepartmentSearch(element) {
+    new TomSelect(element, { create: false, sortField: { field: "text", direction: "asc" }, placeholder: "-- Search / Select Department --" });
+  }
+  document.addEventListener("DOMContentLoaded", function() { enableDepartmentSearch('#department'); });
 
+  function toggleReplacementField() {
+    const hiringType = document.getElementById('hiring_type').value;
+    document.getElementById('replacement-person-group').style.display = hiringType === "Replacement" ? "block" : "none";
+  }
+  toggleReplacementField();
+
+  let level = 0;
   function addLevel() {
     level++;
     document.getElementById('levels').value = level;
-
     const container = document.getElementById('hierarchy-container');
     const div = document.createElement('div');
     div.classList.add('level-block');
     div.setAttribute('id', `level_${level}`);
-
     div.innerHTML = `
       <button type="button" class="remove-btn" onclick="removeLevel(${level})">&times;</button>
-      <strong>Level ${level}</strong><br><br>
-      <div class="hierarchy-row">
-        <div class="form-group">
-          <label>Name</label>
-          <input type="text" name="interviewer_name_${level}" required>
-        </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" name="interviewer_email_${level}" required>
-        </div>
-        <div class="form-group">
-          <label>% Involvement</label>
-          <input type="number" name="interviewer_involvement_${level}" min="0" max="100" required>
-        </div>
-        <div class="form-group">
-          <label>Department</label>
-          <select name="interviewer_department_${level}" required>
-            <option value="">Select Department</option>
-            <option value="HR">HR</option>
-            <option value="Engineering">Engineering</option>
-            <option value="Sales">Sales</option>
-            <option value="Marketing">Marketing</option>
-            <option value="Finance">Finance</option>
-            <!-- Add more departments if needed -->
-          </select>
-        </div>
+      <strong>Level-${level}</strong>
+      <div class="row g-3 mt-1">
+        <div class="col-md-6 form-group"><label>Name <span class="required-asterisk">*</span></label><input type="text" name="interviewer_name_${level}" class="form-control" required></div>
+        <div class="col-md-6 form-group"><label>Email <span class="required-asterisk">*</span></label><input type="email" name="interviewer_email_${level}" class="form-control" required></div>
       </div>
     `;
-
     container.appendChild(div);
   }
-
   function removeLevel(id) {
-    const levelDiv = document.getElementById(`level_${id}`);
-    if (levelDiv) {
-      levelDiv.remove();
-      recalculateLevels();
-    }
+    document.getElementById(`level_${id}`).remove();
+    recalculateLevels();
   }
-
   function recalculateLevels() {
     const blocks = document.querySelectorAll('.level-block');
     let newLevel = 0;
     blocks.forEach((block) => {
       newLevel++;
-      block.querySelector('strong').textContent = `Level ${newLevel}`;
+      block.querySelector('strong').textContent = `Level-${newLevel}`;
       block.querySelector('[name^="interviewer_name_"]').setAttribute('name', `interviewer_name_${newLevel}`);
       block.querySelector('[name^="interviewer_email_"]').setAttribute('name', `interviewer_email_${newLevel}`);
-      block.querySelector('[name^="interviewer_involvement_"]').setAttribute('name', `interviewer_involvement_${newLevel}`);
-      block.querySelector('[name^="interviewer_department_"]').setAttribute('name', `interviewer_department_${newLevel}`);
       block.setAttribute('id', `level_${newLevel}`);
       block.querySelector('.remove-btn').setAttribute('onclick', `removeLevel(${newLevel})`);
     });
     level = newLevel;
     document.getElementById('levels').value = newLevel;
   }
+
+  let utilizationLevel = 0;
+  function addUtilization() {
+    utilizationLevel++;
+    document.getElementById('utilization_levels').value = utilizationLevel;
+    const container = document.getElementById('utilization-container');
+    const div = document.createElement('div');
+    div.classList.add('level-block');
+    div.setAttribute('id', `util_level_${utilizationLevel}`);
+    const deptOptions = document.getElementById('dept-options-template').innerHTML;
+    div.innerHTML = `
+      <button type="button" class="remove-btn" onclick="removeUtilization(${utilizationLevel})">&times;</button>
+      <strong>Utilization ${utilizationLevel}</strong>
+      <div class="row g-3 mt-1">
+        <div class="col-md-6 form-group">
+          <label>Department <span class="required-asterisk">*</span></label>
+          <select name="util_department_${utilizationLevel}" id="util_department_${utilizationLevel}" class="form-select search-select" required>${deptOptions}</select>
+        </div>
+        <div class="col-md-6 form-group"><label>% Utilization <span class="required-asterisk">*</span></label><input type="number" name="util_percent_${utilizationLevel}" min="0" max="100" class="form-control" required></div>
+      </div>
+    `;
+    container.appendChild(div);
+    enableDepartmentSearch(`#util_department_${utilizationLevel}`);
+  }
+  function removeUtilization(id) {
+    document.getElementById(`util_level_${id}`).remove();
+    recalculateUtilizationLevels();
+  }
+  function recalculateUtilizationLevels() {
+    const blocks = document.querySelectorAll('#utilization-container .level-block');
+    let newLevel = 0;
+    blocks.forEach((block) => {
+      newLevel++;
+      block.querySelector('strong').textContent = `Utilization ${newLevel}`;
+      const selectElem = block.querySelector('[name^="util_department_"]');
+      selectElem.setAttribute('name', `util_department_${newLevel}`);
+      selectElem.setAttribute('id', `util_department_${newLevel}`);
+      block.querySelector('[name^="util_percent_"]').setAttribute('name', `util_percent_${newLevel}`);
+      block.setAttribute('id', `util_level_${newLevel}`);
+      block.querySelector('.remove-btn').setAttribute('onclick', `removeUtilization(${newLevel})`);
+    });
+    utilizationLevel = newLevel;
+    document.getElementById('utilization_levels').value = newLevel;
+  }
+
+  const foldersData = {{ question_folders | tojson | safe }};
+  let loadedQuestions = [];
+  let selectedCart = [];
+
+  function toggleLevel2Assessment() {
+      const isChecked = document.getElementById('has_level_2').checked;
+      document.getElementById('level2-fields').style.display = isChecked ? 'block' : 'none';
+      document.getElementById('assessment_title').required = isChecked;
+  }
+
+  function populateExams() {
+      const folderName = document.getElementById('assessment_folder').value;
+      const examDropdown = document.getElementById('assessment_exam');
+      examDropdown.innerHTML = '<option value="">-- Select Exam --</option>';
+      document.getElementById('questions-list-container').style.display = 'none';
+      if (!folderName) return;
+      const folder = foldersData.find(f => f.folder_name === folderName);
+      if (folder && folder.exams) {
+          folder.exams.forEach(exam => {
+              const opt = document.createElement('option');
+              opt.value = exam.id;
+              opt.textContent = exam.title;
+              examDropdown.appendChild(opt);
+          });
+      }
+  }
+
+  function loadQuestions() {
+      const folderName = document.getElementById('assessment_folder').value;
+      const examId = document.getElementById('assessment_exam').value;
+      const container = document.getElementById('questions-list');
+      if (!folderName || !examId) {
+          document.getElementById('questions-list-container').style.display = 'none';
+          return;
+      }
+      container.innerHTML = '<div class="text-center text-muted py-3">Loading questions...</div>';
+      document.getElementById('questions-list-container').style.display = 'block';
+      fetch(`/api/get_exam_questions/${encodeURIComponent(folderName)}/${encodeURIComponent(examId)}`)
+          .then(res => res.json())
+          .then(questions => {
+              loadedQuestions = questions;
+              container.innerHTML = '';
+              if (questions.length === 0) {
+                  container.innerHTML = '<div class="text-center text-muted py-3">No questions found in this exam.</div>';
+                  return;
+              }
+              questions.forEach((q, index) => {
+                  const div = document.createElement('div');
+                  div.className = 'assessment-question-item';
+                  div.innerHTML = `
+                      <input type="checkbox" class="question-checkbox" value="${index}">
+                      <div>
+                          <div style="font-weight: 600; font-size: 0.9rem; color: #0f2547;">Q${index + 1}: ${q.text}</div>
+                          <div style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">Type: ${(q.type || 'MCQ').toUpperCase()}</div>
+                      </div>
+                  `;
+                  container.appendChild(div);
+              });
+          })
+          .catch(err => {
+              container.innerHTML = '<div class="text-center text-danger py-3">Error loading questions.</div>';
+          });
+  }
+
+  function addSelectedToCart() {
+      const checkboxes = document.querySelectorAll('.question-checkbox:checked');
+      if (checkboxes.length === 0) {
+          alert("Please check at least one question to add.");
+          return;
+      }
+      checkboxes.forEach(cb => {
+          const q = loadedQuestions[cb.value];
+          if (!selectedCart.some(item => item.text === q.text)) {
+              selectedCart.push(q);
+          }
+          cb.checked = false;
+      });
+      renderCart();
+  }
+
+  function removeFromCart(index) {
+      selectedCart.splice(index, 1);
+      renderCart();
+  }
+
+  function renderCart() {
+      const cartList = document.getElementById('cart-list');
+      const cartContainer = document.getElementById('cart-container');
+      const countSpan = document.getElementById('cart_count');
+      cartList.innerHTML = '';
+      countSpan.innerText = selectedCart.length;
+      if (selectedCart.length > 0) {
+          cartContainer.style.display = 'block';
+      } else {
+          cartContainer.style.display = 'none';
+      }
+      selectedCart.forEach((q, index) => {
+          const div = document.createElement('div');
+          div.className = 'selected-question-row';
+          div.innerHTML = `
+              <div>
+                  <div style="font-weight: 600; color: #0f2547;">${q.text}</div>
+                  <div style="font-size: 0.8rem; color: #64748b;">Type: ${(q.type || 'MCQ').toUpperCase()}</div>
+              </div>
+              <button type="button" class="btn-remove-q" onclick="removeFromCart(${index})">Remove</button>
+          `;
+          cartList.appendChild(div);
+      });
+      document.getElementById('selected_questions_json').value = JSON.stringify(selectedCart);
+  }
+
+  document.getElementById('requisitionForm').addEventListener('submit', function(e) {
+    const submitBtn = document.getElementById('submitBtn');
+    const btnLoader = document.getElementById('btnLoader');
+    const btnText = document.getElementById('btnText');
+    let total = 0;
+    const inputs = document.querySelectorAll('[name^="util_percent_"]');
+    inputs.forEach(input => total += parseFloat(input.value) || 0);
+    if (inputs.length > 0 && total !== 100) {
+      e.preventDefault();
+      alert("Total Utilization % must be exactly 100. Currently it's " + total + "%.");
+      return;
+    }
+    submitBtn.disabled = true;
+    btnText.textContent = "Submitting...";
+    btnLoader.classList.remove('hidden');
+  });
 </script>

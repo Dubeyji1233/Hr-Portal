@@ -1,50 +1,328 @@
 {% extends "home.html" %}
+{% block head %}
+  <!-- Tom Select CSS & JS for searchable dropdowns -->
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
-    <h3>Edit Requisition</h3>
-    <form method="POST">
-        <div class="form-group">
-            <label>Job Title</label>
-            <input type="text" name="job_title" value="{{ requisition.job_title }}" class="form-control" required>
+<style>
+  .edit-card {
+    background: #ffffff;
+    border: 1px solid var(--border-color, #e3e8ef);
+    border-radius: 14px;
+    padding: 32px;
+    box-shadow: 0 2px 10px rgba(10, 25, 48, 0.03);
+  }
+
+  .edit-card h3 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--ink-900, #0a1930);
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color, #e3e8ef);
+  }
+
+  .form-control, .form-select {
+    border-radius: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color, #e3e8ef);
+  }
+
+  .section-divider {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--ink-800, #0f2547);
+    margin: 28px 0 14px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Custom overrides for searchable department dropdown */
+  .ts-control {
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    border-color: var(--border-color, #e3e8ef) !important;
+  }
+</style>
+
+<div class="edit-card">
+    <h3>Edit Requisition #{{ requisition.id }}</h3>
+
+    <!-- Hidden Template to clone options for dynamic utilization rows -->
+    <select id="dept-options-template" style="display:none;">
+      <option value="">-- Select Department --</option>
+      {% for dept in departments %}
+        <option value="{{ dept }}">{{ dept }}</option>
+      {% endfor %}
+    </select>
+
+    <form method="POST" id="requisitionForm">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Job Title</label>
+                <input type="text" name="job_title" value="{{ requisition.job_title }}" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Department</label>
+                <!-- Main Searchable Department Select -->
+                <select name="department" id="main_department" class="form-select search-select" required>
+                    <option value="">-- Select Department --</option>
+                    {% for dept in departments %}
+                      <option value="{{ dept }}" {% if dept == requisition.department %}selected{% endif %}>{{ dept }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Number of Openings</label>
+                <input type="number" name="number_of_openings" value="{{ requisition.number_of_openings }}" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Customer Name</label>
+                <!-- Searchable / Typeable Customer Datalist -->
+                <input list="customer-list" name="customer_name" value="{{ requisition.customer_name }}" class="form-control" placeholder="Select or type new customer" required>
+                <datalist id="customer-list">
+                    {% for cust in customers %}
+                        <option value="{{ cust }}">
+                    {% endfor %}
+                </datalist>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Skills Required</label>
+                <input type="text" name="skills_required" value="{{ requisition.skills_required }}" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Location</label>
+                <input type="text" name="location" value="{{ requisition.location }}" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Hiring Type</label>
+                <select name="hiring_type" class="form-select" required>
+                    <option value="Replacement" {% if requisition.hiring_type == 'Replacement' %}selected{% endif %}>Replacement</option>
+                    <option value="New" {% if requisition.hiring_type == 'New' %}selected{% endif %}>New</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Budget</label>
+                <input type="text" name="budget" value="{{ requisition.budget }}" class="form-control" required>
+            </div>
+
+            <!-- NEW FIELDS ROW -->
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Experience Required</label>
+                <input type="text" name="experience_required" value="{{ requisition.experience_required }}" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Work Type</label>
+                <select name="work_location_type" class="form-select" required>
+                    <option value="Onsite" {% if requisition.work_location_type == 'Onsite' %}selected{% endif %}>Onsite</option>
+                    <option value="Hybrid" {% if requisition.work_location_type == 'Hybrid' %}selected{% endif %}>Hybrid</option>
+                    <option value="Remote" {% if requisition.work_location_type == 'Remote' %}selected{% endif %}>Remote</option>
+                </select>
+            </div>
+
+            <div class="col-md-12">
+                <label class="form-label fw-bold">Job Description</label>
+                <textarea name="job_description" class="form-control" rows="3" required>{{ requisition.job_description }}</textarea>
+            </div>
+
+            <!-- NEW SCREENING QUESTIONS -->
+            <div class="col-md-12">
+                <label class="form-label fw-bold">Screening Questions (Optional)</label>
+                <textarea name="screening_questions" class="form-control" rows="3" placeholder="e.g., Do you have a valid passport? | Are you willing to relocate?">{{ requisition.screening_questions or '' }}</textarea>
+                <div class="form-text text-muted" style="font-size: 0.75rem;">Separate multiple questions with a pipe character ( | ).</div>
+            </div>
         </div>
 
-        <div class="form-group">
-            <label>Department</label>
-            <input type="text" name="department" value="{{ requisition.department }}" class="form-control" required>
+        <!-- Department Utilization -->
+        <div class="section-divider">Department Utilization</div>
+        <div id="utilization-container">
+            {% for d in department_utilization %}
+            <div class="row g-2 mb-2 utilization-row align-items-center">
+                <div class="col-md-5">
+                    <select name="department_name_{{ loop.index }}" id="department_name_{{ loop.index }}" class="form-select existing-util-dept" required>
+                        <option value="">-- Select Department --</option>
+                        {% for dept in departments %}
+                          <option value="{{ dept }}" {% if dept == d.department_name %}selected{% endif %}>{{ dept }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <input type="number" name="utilization_{{ loop.index }}" value="{{ d.utilization }}" step="0.01" min="0" max="100" class="form-control" placeholder="Utilization %" required>
+                </div>
+                <div class="col-md-2 text-end">
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeUtilizationRow(this)">&times;</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <input type="hidden" id="utilization_count" name="utilization_count" value="{{ department_utilization|length }}">
+        <button type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick="addUtilizationRow()">+ Add Department</button>
+
+        <!-- Interview Hierarchy -->
+        <div class="section-divider">Interview Hierarchy</div>
+        <div id="hierarchy-container">
+            {% for interviewer in interview_hierarchy %}
+            <div class="row g-2 mb-2 hierarchy-row align-items-center">
+                <div class="col-md-5">
+                    <input type="hidden" name="interviewer_level_{{ loop.index }}" value="Level-{{ loop.index }}">
+                    <input type="text" name="interviewer_name_{{ loop.index }}" value="{{ interviewer.interviewer_name }}" class="form-control" placeholder="Interviewer Name" required>
+                </div>
+                <div class="col-md-5">
+                    <input type="email" name="interviewer_email_{{ loop.index }}" value="{{ interviewer.interviewer_email }}" class="form-control" placeholder="Interviewer Email" required>
+                </div>
+                <div class="col-md-2 text-end">
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeHierarchyRow(this)">&times;</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <input type="hidden" id="hierarchy_count" name="hierarchy_count" value="{{ interview_hierarchy|length }}">
+        <button type="button" class="btn btn-outline-secondary btn-sm mb-4" onclick="addHierarchyRow()">+ Add Interviewer</button>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Status</label>
+                <select name="status" class="form-select" required>
+                    <option value="Open" {% if requisition.status == 'Open' %}selected{% endif %}>Open</option>
+                    <option value="On Hold" {% if requisition.status == 'On Hold' %}selected{% endif %}>On Hold</option>
+                    <option value="Lost from Customer" {% if requisition.status == 'Lost from Customer' %}selected{% endif %}>Lost from Customer</option>
+                </select>
+            </div>
         </div>
 
-        <div class="form-group">
-            <label>Number of Openings</label>
-            <input type="number" name="number_of_openings" value="{{ requisition.number_of_openings }}" class="form-control" required>
+        <div class="d-flex justify-content-between pt-3 border-top">
+            <a href="{{ url_for('view_requisition_details', requisition_id=requisition.id) }}" class="btn btn-light px-4">Cancel</a>
+            <button type="submit" class="btn btn-success px-4">Update Requisition</button>
         </div>
-
-        <div class="form-group">
-            <label>Skills Required</label>
-            <input type="text" name="skills_required" value="{{ requisition.skills_required }}" class="form-control" required>
-        </div>
-
-        <div class="form-group">
-            <label>Location</label>
-            <input type="text" name="location" value="{{ requisition.location }}" class="form-control" required>
-        </div>
-
-        <div class="form-group">
-            <label>Hiring Type</label>
-            <input type="text" name="hiring_type" value="{{ requisition.hiring_type }}" class="form-control" required>
-        </div>
-
-        <div class="form-group">
-            <label>Budget</label>
-            <input type="text" name="budget" value="{{ requisition.budget }}" class="form-control" required>
-        </div>
-
-        <div class="form-group">
-            <label>Job Description</label>
-            <textarea name="job_description" class="form-control" required>{{ requisition.job_description }}</textarea>
-        </div>
-
-        <button type="submit" class="btn btn-success">Update</button>
-        <a href="{{ url_for('view_requisitions', requisition_id=requisition.id) }}" class="btn btn-secondary">Cancel</a>
     </form>
 </div>
+
+<script>
+    function enableDepartmentSearch(selector) {
+        if (document.querySelector(selector)) {
+            new TomSelect(selector, {
+                create: false,
+                sortField: { field: "text", direction: "asc" },
+                placeholder: "-- Search / Select Department --"
+            });
+        }
+    }
+
+    // Initialize Tom Select dropdowns & Submit Listener
+    document.addEventListener("DOMContentLoaded", function() {
+        // Main Department
+        enableDepartmentSearch('#main_department');
+
+        // Existing Utilization Departments
+        document.querySelectorAll('.existing-util-dept').forEach(selectElem => {
+            enableDepartmentSearch(`#${selectElem.id}`);
+        });
+
+
+        // Add Total Utilization 100% Validation Listener
+        document.getElementById('requisitionForm').addEventListener('submit', function(e) {
+            let total = 0;
+
+            // Target ONLY number inputs inside the utilization container
+            const utilInputs = document.querySelectorAll('#utilization-container input[type="number"]');
+
+            utilInputs.forEach(input => {
+                total += parseFloat(input.value) || 0;
+            });
+
+            // Rounding to 2 decimal places to handle float precision
+            total = Math.round(total * 100) / 100;
+
+            if (utilInputs.length > 0 && total !== 100) {
+                e.preventDefault();
+                alert(`Total Department Utilization % must equal exactly 100%.\nCurrent Total: ${total}%`);
+            }
+        });
+    });
+
+    function addUtilizationRow() {
+        const container = document.getElementById('utilization-container');
+        const countInput = document.getElementById('utilization_count');
+        let count = parseInt(countInput.value) + 1;
+        const deptOptions = document.getElementById('dept-options-template').innerHTML;
+
+        const row = document.createElement('div');
+        row.className = 'row g-2 mb-2 utilization-row align-items-center';
+        row.innerHTML = `
+            <div class="col-md-5">
+                <select name="department_name_${count}" id="department_name_${count}" class="form-select" required>
+                    ${deptOptions}
+                </select>
+            </div>
+            <div class="col-md-5">
+                <input type="number" name="utilization_${count}" class="form-control" step="0.01" min="0" max="100" placeholder="Utilization %" required>
+            </div>
+            <div class="col-md-2 text-end">
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeUtilizationRow(this)">&times;</button>
+            </div>
+        `;
+        container.appendChild(row);
+        countInput.value = count;
+
+        // Initialize Tom Select for the newly appended department row
+        enableDepartmentSearch(`#department_name_${count}`);
+    }
+
+    function removeUtilizationRow(button) {
+        const row = button.closest('.utilization-row');
+        row.remove();
+        const rows = document.querySelectorAll('.utilization-row');
+        rows.forEach((r, i) => {
+            const selectElem = r.querySelector('select[name^="department_name_"]');
+            if (selectElem) {
+                selectElem.name = `department_name_${i + 1}`;
+                selectElem.id = `department_name_${i + 1}`;
+            }
+            const utilElem = r.querySelector('input[name^="utilization_"]');
+            if (utilElem) {
+                utilElem.name = `utilization_${i + 1}`;
+            }
+        });
+        document.getElementById('utilization_count').value = rows.length;
+    }
+
+    function addHierarchyRow() {
+        const container = document.getElementById('hierarchy-container');
+        const countInput = document.getElementById('hierarchy_count');
+        let count = parseInt(countInput.value) + 1;
+
+        const row = document.createElement('div');
+        row.className = 'row g-2 mb-2 hierarchy-row align-items-center';
+        row.innerHTML = `
+            <div class="col-md-5">
+                <input type="hidden" name="interviewer_level_${count}" value="Level-${count}">
+                <input type="text" name="interviewer_name_${count}" class="form-control" placeholder="Interviewer Name" required>
+            </div>
+            <div class="col-md-5">
+                <input type="email" name="interviewer_email_${count}" class="form-control" placeholder="Interviewer Email" required>
+            </div>
+            <div class="col-md-2 text-end">
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeHierarchyRow(this)">&times;</button>
+            </div>
+        `;
+        container.appendChild(row);
+        countInput.value = count;
+    }
+
+    function removeHierarchyRow(button) {
+        const row = button.closest('.hierarchy-row');
+        row.remove();
+        const rows = document.querySelectorAll('.hierarchy-row');
+        rows.forEach((r, i) => {
+            let index = i + 1;
+            r.querySelector('[name^="interviewer_level_"]').name = `interviewer_level_${index}`;
+            r.querySelector('[name^="interviewer_level_"]').value = `Level-${index}`;
+            r.querySelector('[name^="interviewer_name_"]').name = `interviewer_name_${index}`;
+            r.querySelector('[name^="interviewer_email_"]').name = `interviewer_email_${index}`;
+        });
+        document.getElementById('hierarchy_count').value = rows.length;
+    }
+</script>
 {% endblock %}

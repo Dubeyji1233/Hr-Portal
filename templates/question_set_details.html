@@ -1,0 +1,61 @@
+<style>
+  .form-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted, #667085); font-weight: 600; margin-bottom: 6px; }
+  .form-control, .form-select { border-color: var(--border-color, #e3e8ef); border-radius: 8px; font-size: 0.9rem; color: var(--text-main, #16233d); padding: 10px 14px; }
+  .form-control:focus, .form-select:focus { border-color: var(--info, #2f6fed); box-shadow: 0 0 0 0.2rem rgba(47, 111, 237, 0.1); }
+  .btn-theme { background-color: var(--ink-900, #0f2547); color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; }
+  .btn-theme:hover { background-color: var(--ink-700, #163862); color: #fff; }
+
+  /* VS Code Style JSON Editor */
+  .json-editor {
+      font-family: 'Courier New', Courier, monospace;
+      background-color: #1e1e1e !important;
+      color: #d4d4d4 !important;
+      border: 1px solid #333 !important;
+      border-radius: 8px;
+      padding: 20px;
+      line-height: 1.5;
+      tab-size: 4;
+      font-size: 0.9rem;
+  }
+  .json-editor[readonly] { background-color: #2d2d2d !important; color: #999 !important; cursor: not-allowed; }
+</style>
+
+<div class="dash-wrap">
+  <div class="dash-heading">
+    <div>
+      <h2>Raw JSON Editor: <span style="color: var(--info, #2f6fed);">{{ folder_name }}</span></h2>
+      <p>Directly view or modify the questions.json file for bulk updates. Must be valid JSON.</p>
+    </div>
+    <a href="{{ url_for('home', page='question_sets') }}" class="btn btn-outline-secondary" style="border-color: var(--border-color, #e3e8ef); color: var(--text-main, #16233d); border-radius: 8px; font-weight: 600; padding: 10px 20px;">Back to List</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show" role="alert" style="border-radius: 12px; border: none;">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="chart-container" style="background: #fff; border-radius: 12px; padding: 24px;">
+    {% set is_readonly = request.args.get('view_only') == 'true' %}
+
+    <form method="POST">
+      <input type="hidden" name="save_json" value="true">
+
+      <textarea name="json_content" class="form-control json-editor" rows="35" {% if is_readonly %}readonly{% endif %}>{{ json_string }}</textarea>
+
+      {% if not is_readonly %}
+      <button type="submit" class="btn-theme mt-3 w-100" style="padding: 14px;">Save JSON Changes</button>
+      {% else %}
+      <div class="alert alert-info mt-3 text-center" style="border-radius: 8px; font-size: 0.95rem; background: #e5f2fc; color: #0078d4; border: none;">
+        You are in View Only mode.
+        <a href="{{ url_for('edit_question_set', folder_name=folder_name) }}" class="fw-bold" style="color: #0f2547; text-decoration: underline;">Click here to enable editing</a>.
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>

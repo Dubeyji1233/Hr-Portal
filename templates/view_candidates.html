@@ -14,25 +14,46 @@
     margin-top: 20px;
     font-weight: bold;
   }
-  .dataTables_wrapper {
+
+  .dataTables-controls-fixed {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
     padding: 0 20px;
+    background-color: #f8fafc;
+    z-index: 10;
+  }
+
+  .table-responsive-fixed {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-top: 10px;
+    padding: 0 20px;
+  }
+
+  .filter-controls {
+    margin: 20px 20px 10px;
   }
 
   /* Status text colors */
   .status-in-process {
-    color: #FFC107 !important;   /* Yellow */
+    color: #FFC107 !important;
   }
   .status-selected {
-    color: #28A745 !important;   /* Green */
+    color: #28A745 !important;
   }
   .status-rejected {
-    color: #DC3545 !important;   /* Red */
+    color: #DC3545 !important;
+  }
+  .status-did-not-join {
+    color: #FD7E14 !important;
+    font-weight: bold !important;
   }
 </style>
 
 <h2>View Candidates</h2>
 
-<div class="container my-3">
+<div class="container my-3 filter-controls">
   <div class="row justify-content-center align-items-center g-2">
     <div class="col-md-3">
       <input type="text" id="candidateNameSearch" placeholder="Search by Candidate Name"
@@ -47,79 +68,125 @@
   </div>
 </div>
 
-<table id="candidateTable" class="display table table-bordered table-striped">
-  <thead>
-    <tr>
-      <th>Name</th><th>Email</th><th>Phone</th><th>Shortlisted By</th>
-      <th>Shortlisted On</th><th>Requisition Title</th><th>View Details</th>
-      <th>Resume</th><th>Action</th><th>Schedule Interview</th><th>Selection Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for candidate in candidates %}
-    {% set cls = 'status-' ~ (candidate.selection_status or 'in process')|lower|replace(' ', '-') %}
-    <tr>
-      <td>{{ candidate.name }}</td>
-      <td>{{ candidate.email }}</td>
-      <td>{{ candidate.phone }}</td>
-      <td class="shortlisted_by_{{ candidate.id }}">{{ candidate.shortlisted_by or 'N/A' }}</td>
-      <td class="shortlisted_on_{{ candidate.id }}">{{ candidate.shortlisted_on or 'N/A' }}</td>
-      <td>{{ candidate.requisition_title }}</td>
-      <td>
-        <a href="{{ url_for('candidate_detail', id=candidate.id) }}" class="btn btn-primary btn-sm">View</a>
-      </td>
-      <td>
-        <a href="{{ url_for('download_resume', candidate_id=candidate.id) }}"
-           class="btn btn-link btn-sm">Download</a>
-      </td>
-      <td>
-        {% if not candidate.is_shortlisted %}
-        <button class="btn btn-success btn-sm shortlist-btn" data-id="{{ candidate.id }}">
-          Shortlist
-        </button>
-        {% else %}
-        <span class="text-muted">Shortlisted</span>
-        {% endif %}
-      </td>
-      <td>
-        {% if candidate.shortlisted_by %}
-        <a href="{{ url_for('schedule_interview', candidate_id=candidate.id) }}"
-           class="btn btn-primary btn-sm">Schedule</a>
-        {% else %}
-        <span class="text-muted">Not shortlisted</span>
-        {% endif %}
-      </td>
-      <td>
-        {% if candidate.is_shortlisted %}
-        <select class="form-select form-select-sm selection-status-dropdown {{ cls }}"
-                data-id="{{ candidate.id }}">
-          <option value="in process"  {% if candidate.selection_status|lower == 'in process' %}selected{% endif %}>
-            In Process
-          </option>
-          <option value="selected"    {% if candidate.selection_status|lower == 'selected' %}selected{% endif %}>
-            Selected
-          </option>
-          <option value="rejected"    {% if candidate.selection_status|lower == 'rejected' %}selected{% endif %}>
-            Rejected
-          </option>
-        </select>
-        {% else %}
-        <span class="text-muted">-</span>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<!-- Fixed Controls Container -->
+<div class="dataTables-controls-fixed">
+  <div id="table-length-container"></div>
+  <div id="table-filter-container"></div>
+</div>
+
+<div class="table-responsive-fixed">
+  <table id="candidateTable" class="display table table-bordered table-striped" style="width:100%;">
+    <thead>
+      <tr>
+        <th>Name</th><th>Email</th><th>Phone</th><th>Shortlisted By</th>
+        <th>Shortlisted On</th><th>Requisition Title</th><th>View Details</th>
+        <th>Resume</th><th>Action</th><th>Schedule Interview</th><th>Selection Status</th>
+        <th>Interview Progress</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for candidate in candidates %}
+      {% set cls = 'status-' ~ (candidate.selection_status or 'in process')|lower|replace(' ', '-') %}
+      <tr>
+        <td>{{ candidate.name }}</td>
+        <td>{{ candidate.email }}</td>
+        <td>{{ candidate.phone }}</td>
+        <td class="shortlisted_by_{{ candidate.id }}">{{ candidate.shortlisted_by or 'N/A' }}</td>
+        <td class="shortlisted_on_{{ candidate.id }}">{{ candidate.shortlisted_on or 'N/A' }}</td>
+        <td>{{ candidate.requisition_title }}</td>
+        <td>
+          <a href="{{ url_for('candidate_detail', id=candidate.id) }}" class="btn btn-primary btn-sm">View</a>
+        </td>
+        <td>
+          <a href="{{ url_for('download_resume', candidate_id=candidate.id) }}"
+             class="btn btn-link btn-sm">Download</a>
+        </td>
+        <td>
+          {% if not candidate.is_shortlisted %}
+          <button class="btn btn-success btn-sm shortlist-btn" data-id="{{ candidate.id }}">
+            Shortlist
+          </button>
+          {% else %}
+          <span class="text-muted">Shortlisted</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if candidate.shortlisted_by %}
+          <a href="{{ url_for('schedule_interview', candidate_id=candidate.id) }}"
+             class="btn btn-primary btn-sm">Schedule</a>
+          {% else %}
+          <span class="text-muted">Not shortlisted</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if candidate.is_shortlisted %}
+          <select class="form-select form-select-sm selection-status-dropdown {{ cls }}"
+                  data-id="{{ candidate.id }}">
+            <option value="In Process"  {% if candidate.selection_status == 'In Process' %}selected{% endif %}>
+              In Process
+            </option>
+            <option value="Selected"    {% if candidate.selection_status == 'Selected' %}selected{% endif %}>
+              Selected
+            </option>
+            <option value="Rejected"    {% if candidate.selection_status == 'Rejected' %}selected{% endif %}>
+              Rejected
+            </option>
+<!--            <option value="Did Not Join" {% if candidate.selection_status == 'Did Not Join' %}selected{% endif %}-->
+<!--                    style="color: #fd7e14;">-->
+<!--              Did Not Join-->
+<!--            </option>-->
+          </select>
+          {% else %}
+          <span class="text-muted">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if candidate.total_levels > 0 %}
+            <div class="progress" style="height: 20px;">
+              <div class="progress-bar
+                          {% if candidate.rejected_levels > 0 %}
+                              bg-danger
+                          {% elif candidate.completed_levels == candidate.total_levels %}
+                              bg-success
+                          {% elif candidate.completed_levels > 0 %}
+                              bg-info
+                          {% else %}
+                              bg-secondary
+                          {% endif %}"
+                   role="progressbar"
+                   style="width: {{ (candidate.completed_levels / candidate.total_levels) * 100 }}%;"
+                   aria-valuenow="{{ candidate.completed_levels }}"
+                   aria-valuemin="0"
+                   aria-valuemax="{{ candidate.total_levels }}">
+                {{ candidate.completed_levels }}/{{ candidate.total_levels }}
+              </div>
+            </div>
+          {% else %}
+            <span class="text-muted">Not Scheduled</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script>
   $(function () {
-    const table = $('#candidateTable').DataTable();
+    const table = $('#candidateTable').DataTable({
+      initComplete: function () {
+        $('#table-length-container').append($('#candidateTable_length'));
+        $('#table-filter-container').append($('#candidateTable_filter'));
+      }
+    });
 
-    // Filters
-    $('#candidateNameSearch').on('keyup', () => table.columns(0).search($('#candidateNameSearch').val()).draw());
+    // Custom filters
+    $('#candidateNameSearch').on('keyup', () => {
+      table.columns(0).search($('#candidateNameSearch').val()).draw();
+    });
+
     $('#dateFilter').on('change', function () {
       const sel = this.value;
       table.rows().every(function () {
@@ -127,13 +194,14 @@
         this.visible(!sel || rowDate === sel);
       });
     });
+
     $('#clearFilters').click(() => {
       $('#candidateNameSearch, #dateFilter').val('');
       table.columns().search('').draw();
     });
 
     // Shortlist
-    $('.shortlist-btn').click(function () {
+    $('#candidateTable').on('click', '.shortlist-btn', function () {
       const id = $(this).data('id'), btn = $(this);
       $.post(`/shortlist_candidate/${id}`, resp => {
         if (resp.success) {
@@ -146,11 +214,21 @@
     });
 
     // Selection status change
-    $('.selection-status-dropdown').on('change', function () {
+    $('#candidateTable').on('change', '.selection-status-dropdown', function () {
       const $sel = $(this),
             id   = $sel.data('id'),
             val  = $sel.val(),
-            cls  = 'status-' + val.replace(' ', '-');
+            cls  = 'status-' + val.toLowerCase().replace(/ /g, '-');
+
+      // Show confirmation for Did Not Join
+      if (val === 'Did Not Join') {
+        if (!confirm('⚠️ Warning: This candidate was selected but did not join.\n\nThis will:\n• Decrease filled positions count\n• Reopen the requisition if it was closed\n\nContinue?')) {
+          // Reset to previous value by reloading
+          location.reload();
+          return;
+        }
+      }
+
       $.ajax({
         url: `/update_selection_status/${id}`,
         method: 'POST',
@@ -158,9 +236,12 @@
         data: JSON.stringify({ selection_status: val }),
         success: resp => {
           if (resp.success) {
-            // update color class
-            $sel.removeClass('status-in-process status-selected status-rejected')
+            $sel.removeClass('status-in-process status-selected status-rejected status-did-not-join')
                 .addClass(cls);
+
+            if (val === 'Did Not Join') {
+              alert('✓ Candidate marked as "Did Not Join"\n✓ Position has been reopened for hiring');
+            }
           } else alert('Update failed');
         },
         error: () => alert('Error updating status')

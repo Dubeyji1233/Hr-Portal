@@ -1,0 +1,1027 @@
+{
+  "exams": [
+    {
+      "id": "genai-practitioner-exam-1",
+      "title": "GenAI Practitioner Exam 1",
+      "durationMinutes": 130,
+      "secondsPerQuestion": 120,
+      "passPercent": 70,
+      "questions": [
+        {
+          "id": "q1",
+          "text": "An insurance company wants to use generative AI to reduce the time it takes to process customer claims. Claim decisions can have legal and financial impact, and the company must be able to explain how each decision was made. Which proposed use of GenAI is INCORRECT and should be avoided?",
+          "options": [
+            "Use a Bedrock Knowledge Base (RAG) to answer adjuster questions with citations to policy documents",
+            "Automatically approve or deny claims end-to-end based only on the model’s output, without human review",
+            "Draft customer response emails with Bedrock Guardrails and require an agent to approve before sending",
+            "Use Amazon Bedrock to summarize claim documents and highlight missing information for an adjuster to review"
+          ],
+          "answerIndexes": [
+            1
+          ],
+          "multi": false,
+          "explanation": "For high-impact decisions, GenAI should augment staff, not replace them end-to-end without human review."
+        },
+        {
+          "id": "q2",
+          "text": "A company uses a large foundation model to draft short customer-support replies. The app must respond in under 150 ms and stay within a fixed monthly inference budget, but the current model is too slow and expensive. The company wants to keep the same response quality while using a smaller, faster model. Which approach is the BEST fit?",
+          "options": [
+            "Use Bedrock Knowledge Bases for RAG with the same large model",
+            "Add Bedrock Guardrails to reduce tokens and improve latency",
+            "Use Bedrock Provisioned Throughput on the large model",
+            "Use SageMaker AI model distillation to create a smaller model"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Distillation transfers behavior from a large teacher to a smaller student model for lower latency and cost."
+        },
+        {
+          "id": "q3",
+          "text": "A team is iterating on a prompt for an Amazon Bedrock chat assistant about return/refund policy. Evaluation: 20 test prompts, standard cases only, ROUGE-L improved 0.41→0.55, known issue is incorrect refund eligibility. Based only on this, which is the best next step?",
+          "options": [
+            "Create a broader test set (including edge cases) and add a factuality/groundedness quality check in addition to ROUGE-L",
+            "Increase the model temperature to improve answer variety and re-run ROUGE-L",
+            "Fine-tune the foundation model on the 20 reference answers to reduce ticket volume",
+            "Deploy the new prompt because ROUGE-L increased from 0.41 to 0.55"
+          ],
+          "answerIndexes": [
+            0
+          ],
+          "multi": false,
+          "explanation": "Expand coverage to edge cases and measure factual correctness, not only ROUGE-L overlap."
+        },
+        {
+          "id": "q4",
+          "text": "A GenAI clinical assistant on Bedrock: EU and US users; EU patient data must be processed in EU; stack in us-east-1; Frankfurt→us-east-1 210ms, Frankfurt→eu-central-1 35ms; model available in both; must tolerate loss of one Region. Best next step?",
+          "options": [
+            "Invoke the model only in us-east-1 and rely on KMS encryption",
+            "Keep the stack in us-east-1 and add CloudFront caching in EU",
+            "Use S3 Cross-Region Replication to copy prompts to us-east-1",
+            "Deploy active-active in us-east-1 and eu-central-1 with latency routing"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Multi-Region active-active meets residency, latency, and Region-failure requirements."
+        },
+        {
+          "id": "q5",
+          "text": "AWS secures Bedrock infrastructure; the company configures IAM, encrypts prompts in S3, and controls log access. Which security principle is this?",
+          "options": [
+            "AWS shared responsibility model",
+            "Least privilege access",
+            "Defense in depth",
+            "Data minimization"
+          ],
+          "answerIndexes": [
+            0
+          ],
+          "multi": false,
+          "explanation": "Shared responsibility: AWS secures the service; customer secures configuration and data in the cloud."
+        },
+        {
+          "id": "q6",
+          "text": "Evaluating short summaries of support chats with human reference summaries. Want an automated metric based on overlapping text units. Which metric is most appropriate?",
+          "options": [
+            "ROUGE; overlap of n-grams (and related units) between generated and reference summaries",
+            "BLEU; overlap of n-grams between generated and reference summaries",
+            "Perplexity; how well the model predicts the next token on the test set",
+            "AUC; the model’s ability to rank positive examples above negative examples"
+          ],
+          "answerIndexes": [
+            0
+          ],
+          "multi": false,
+          "explanation": "ROUGE is standard for summarization vs reference summaries using lexical overlap."
+        },
+        {
+          "id": "q7",
+          "text": "A team uses SageMaker to classify tickets then templates. They want natural personalized drafts, cannot train new models, and must reduce PII/unsafe content with least operational effort. Best change?",
+          "options": [
+            "Use Amazon Comprehend to extract entities and sentiment, then assemble replies from templates",
+            "Train a custom text-generation model in SageMaker using past agent replies",
+            "Improve the ticket classifier accuracy and expand the library of response templates",
+            "Use Amazon Bedrock to generate draft replies, grounding with a Knowledge Base and adding Bedrock Guardrails"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Bedrock + RAG + Guardrails meets GenAI drafting without new training and adds safety controls."
+        },
+        {
+          "id": "q8",
+          "text": "Which option best describes a GenAI agent use case (for example, Agents for Amazon Bedrock) rather than a simple Q&A assistant?",
+          "options": [
+            "Answers HR policy questions from an uploaded PDF",
+            "Classifies customer emails into support categories",
+            "Forecasts next month’s product demand from sales history",
+            "Automatically completes a refund by calling business APIs"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Agents take actions via tools/APIs; Q&A alone is assistant behavior."
+        },
+        {
+          "id": "q9",
+          "text": "A team needs a repeatable way to evaluate whether each Bedrock prompt change improves support-reply quality. Best practice?",
+          "options": [
+            "Measure improvement by comparing prompt length and model output token counts between versions",
+            "Create a version-controlled test set of representative and edge-case prompts and score outputs with a consistent rubric",
+            "Rely on developers to try a few new, ad hoc prompts after each change",
+            "Use only production user feedback and support ticket volume to judge prompt quality"
+          ],
+          "answerIndexes": [
+            1
+          ],
+          "multi": false,
+          "explanation": "Stable golden set + consistent rubric enables repeatable prompt regression testing."
+        },
+        {
+          "id": "q10",
+          "text": "Which TWO statements are INCORRECT or unsafe descriptions of when RAG is a good fit? (Select TWO.)",
+          "options": [
+            "RAG is primarily used to retrain the model on new documents",
+            "Reducing hallucinations by grounding responses in retrieved context",
+            "Enterprise Q&A over internal wikis, PDFs, and runbooks",
+            "RAG removes the need for document access controls",
+            "Employee policy and compliance guidance lookup from internal documents",
+            "Customer support assistants grounded in up-to-date knowledge articles"
+          ],
+          "answerIndexes": [
+            0,
+            3
+          ],
+          "multi": true,
+          "explanation": "RAG retrieves at inference; it does not retrain models and does not remove access controls."
+        },
+        {
+          "id": "q11",
+          "text": "Reviewers score Bedrock chatbot responses for helpfulness, correctness, and tone using a rubric, then compare agreement. Which evaluation approach?",
+          "options": [
+            "Adversarial red teaming",
+            "Offline benchmark evaluation",
+            "Automated metric-based evaluation",
+            "Human evaluation"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Human reviewers scoring with a rubric is human evaluation."
+        },
+        {
+          "id": "q12",
+          "text": "Bedrock drafts vary and invent policy details. Want more consistent safer responses with minimal effort, no new data sources or training. Best change?",
+          "options": [
+            "Add a Knowledge Base for Amazon Bedrock for RAG grounding",
+            "Fine-tune a custom model on historical support transcripts",
+            "Lower temperature and top_p for more deterministic outputs",
+            "Switch to a larger, more capable foundation model"
+          ],
+          "answerIndexes": [
+            2
+          ],
+          "multi": false,
+          "explanation": "Lower temperature/top_p increases determinism without new infra or training."
+        },
+        {
+          "id": "q13",
+          "text": "Which action is NOT an appropriate use of documentation (model/data cards) to increase transparency?",
+          "options": [
+            "Create a data card that records dataset sources, collection methods, and known gaps",
+            "Maintain versioned documentation when prompts, models, or data sources change",
+            "Publish a model card describing intended use, limitations, and evaluation results",
+            "Skip creating model/data documentation because the model is managed by AWS"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Managed models still require documenting your application’s use, data, and limits."
+        },
+        {
+          "id": "q14",
+          "text": "Which TWO statements about model generalization are INCORRECT? (Select TWO.)",
+          "options": [
+            "Overfitting is primarily caused by high bias, so simplifying the model is the main fix.",
+            "Underfitting happens when a model has too much variance and memorizes training noise.",
+            "Overfitting often shows low training error but higher error on new data.",
+            "Increasing model complexity tends to reduce bias and increase variance, raising overfitting risk.",
+            "Underfitting often shows high error on both training and new data.",
+            "Using a held-out validation set or cross-validation helps detect overfitting before deployment."
+          ],
+          "answerIndexes": [
+            0,
+            1
+          ],
+          "multi": true,
+          "explanation": "Overfitting is high variance; underfitting is often high bias—not the reverse."
+        },
+        {
+          "id": "q15",
+          "text": "Which TWO statements are NOT secure data engineering best practices for S3 AI datasets? (Select TWO.)",
+          "options": [
+            "Encrypt S3 objects with SSE-KMS and control key access",
+            "Automate data quality checks and quarantine records that fail validation",
+            "Make the S3 bucket public-read to simplify access for analysts and jobs",
+            "Use IAM least privilege and role-based access for datasets",
+            "Disable versioning to allow silent overwrites when data needs correction",
+            "Use checksums and S3 versioning to detect and recover from tampering"
+          ],
+          "answerIndexes": [
+            2,
+            4
+          ],
+          "multi": true,
+          "explanation": "Public-read buckets and disabling versioning are insecure anti-patterns."
+        },
+        {
+          "id": "q16",
+          "text": "Which recommendation is INCORRECT for choosing between batch and real-time inference for checkout (<200ms) vs nightly 50M scores to S3?",
+          "options": [
+            "Use a real-time inference endpoint for the checkout transaction decision",
+            "Use batch inference to score the nightly 50 million historical records and write outputs to Amazon S3",
+            "Use batch inference for the checkout transaction decision because the predictions can be processed later",
+            "Use batch inference when the application can tolerate delayed results and wants to optimize cost per prediction"
+          ],
+          "answerIndexes": [
+            2
+          ],
+          "multi": false,
+          "explanation": "Checkout needs real-time; batch is wrong for sub-200ms interactive decisions."
+        },
+        {
+          "id": "q17",
+          "text": "Churn dataset in S3 has missing fields, outliers, categoricals; keep PII in AWS; avoid custom code. Best EDA approach to inform preprocessing?",
+          "options": [
+            "Skip EDA and immediately train a churn model so the algorithm automatically learns how to handle missing values and outliers",
+            "Use Amazon Comprehend on the entire dataset to detect sentiment and replace missing values with the dominant sentiment label",
+            "Use Amazon Bedrock to generate a textual summary of the dataset and proceed with standard preprocessing steps for all columns",
+            "Use SageMaker Data Wrangler to profile and visualize the data, then choose preprocessing based on observed issues"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Data Wrangler provides managed visual EDA to justify targeted preprocessing."
+        },
+        {
+          "id": "q18",
+          "text": "Draft polite email responses; experiment with multiple FMs without managing servers; prompts/responses in AWS; filter unsafe content. Primary service?",
+          "options": [
+            "Amazon Q Developer",
+            "Amazon Bedrock (with Bedrock Guardrails)",
+            "Amazon Comprehend sentiment analysis",
+            "Amazon SageMaker AI training jobs"
+          ],
+          "answerIndexes": [
+            1
+          ],
+          "multi": false,
+          "explanation": "Bedrock provides managed multi-model FM access plus Guardrails."
+        },
+        {
+          "id": "q19",
+          "text": "Weekly newsletter summarizes 30 S3 articles by sending full text every time—slow, costly, sometimes outdated. Need lower cost/latency and grounding. Best change?",
+          "options": [
+            "Increase model temperature and max_tokens to improve writing quality",
+            "Use Knowledge Bases for Amazon Bedrock to implement RAG over the S3 articles",
+            "Fine-tune a foundation model weekly on prior newsletters and prompts",
+            "Continue sending all articles each time, but add more detailed prompt instructions"
+          ],
+          "answerIndexes": [
+            1
+          ],
+          "multi": false,
+          "explanation": "RAG retrieves only relevant passages, cutting tokens and improving grounding."
+        },
+        {
+          "id": "q20",
+          "text": "Review board, approval gates, documentation, monitoring, audits for a Bedrock assistant. Which principle?",
+          "options": [
+            "Defense in depth to add multiple security layers",
+            "Fairness to reduce biased outcomes across user groups",
+            "Least privilege to minimize access to Bedrock APIs",
+            "AI governance to provide lifecycle oversight and accountability"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Boards, gates, docs, and audits are AI governance processes."
+        },
+        {
+          "id": "q21",
+          "text": "Pilot: GenAI adapts policy change in 1 day vs 4 weeks, handles unseen questions 71% vs 22%, free-form NL, faster responses. Best interpretation of GenAI advantage?",
+          "options": [
+            "Lowest per-message cost is the main benefit.",
+            "Retrieval guarantees perfect factual accuracy and no hallucinations.",
+            "Needs extensive labeled data and predefined intents to work.",
+            "Faster adaptation and free-form responses improve responsiveness."
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Exhibit shows faster adaptation, better unseen handling, and free-form NL UX."
+        },
+        {
+          "id": "q22",
+          "text": "Which scenario most clearly shows AI/ML value via personalization at scale?",
+          "options": [
+            "Applying a fixed tax formula to every invoice in an accounting system",
+            "Delivering real-time product recommendations that adapt to each user’s behavior",
+            "Triggering an alert when CPU utilization exceeds a static threshold",
+            "Sending a nightly CSV report of total sales by region"
+          ],
+          "answerIndexes": [
+            1
+          ],
+          "multi": false,
+          "explanation": "Per-user adaptive recommendations are classic personalization-at-scale."
+        },
+        {
+          "id": "q23",
+          "text": "Why continue monitoring Bedrock chatbot outputs and collecting feedback after deployment?",
+          "options": [
+            "Once deployed, the model’s performance is fixed because the parameters do not change",
+            "Amazon Bedrock automatically guarantees response accuracy for all future prompts",
+            "Model quality can drift as user behavior and input data change over time",
+            "Foundation models do not generate responses unless retrained each week"
+          ],
+          "answerIndexes": [
+            2
+          ],
+          "multi": false,
+          "explanation": "Input/distribution drift can degrade quality even if weights stay fixed."
+        },
+        {
+          "id": "q24",
+          "text": "Translate chat messages in 20 countries with low latency, consistent brand names, PII present; fully managed, no building/training models. BEST solution?",
+          "options": [
+            "Use Amazon Comprehend to detect the source language and translate the text",
+            "Use Amazon Bedrock to prompt an FM to translate each message and store prompts for reuse",
+            "Use Amazon Translate real-time translation with a custom terminology list",
+            "Use Amazon Transcribe to convert messages to text, then deliver to agents"
+          ],
+          "answerIndexes": [
+            2
+          ],
+          "multi": false,
+          "explanation": "Amazon Translate real-time + custom terminology fits latency and brand consistency."
+        },
+        {
+          "id": "q25",
+          "text": "Which statement about Amazon Bedrock Guardrails is INCORRECT?",
+          "options": [
+            "It can redact or mask sensitive data like PII.",
+            "It can block prompts about configured denied topics.",
+            "It permanently changes the model’s weights to enforce safety.",
+            "It can filter and block harmful model responses."
+          ],
+          "answerIndexes": [
+            2
+          ],
+          "multi": false,
+          "explanation": "Guardrails are runtime policies; they do not retrain or change model weights."
+        },
+        {
+          "id": "q26",
+          "text": "Prompt injection risk: user says “ignore previous instructions.” Which mitigation best helps reduce this risk?",
+          "options": [
+            "Enable AWS CloudTrail for all AWS accounts and regions",
+            "Use Amazon Bedrock Guardrails to filter and constrain inputs/outputs",
+            "Fine-tune the model on your organization’s policies",
+            "Encrypt all prompts stored in Amazon S3 with AWS KMS"
+          ],
+          "answerIndexes": [
+            1
+          ],
+          "multi": false,
+          "explanation": "Guardrails constrain prompts/outputs at inference; encryption/auditing alone don’t stop injection."
+        },
+        {
+          "id": "q27",
+          "text": "Warehouse safety: flag missing helmets in photos AND read serial numbers from labels. Which TWO computer vision tasks? (Select TWO.)",
+          "options": [
+            "Perform image classification to predict whether a shipment will be late",
+            "Encrypt the images in Amazon S3 with SSE-KMS and restrict access with least-privilege IAM",
+            "Perform OCR to extract the serial number text from label images",
+            "Add Amazon Bedrock Guardrails to block toxic language in model responses",
+            "Perform sentiment analysis on written safety reports to find negative feedback",
+            "Perform object detection to locate helmets and flag missing helmets"
+          ],
+          "answerIndexes": [
+            2,
+            5
+          ],
+          "multi": true,
+          "explanation": "Helmets need object detection; serial numbers need OCR."
+        },
+        {
+          "id": "q28",
+          "text": "Chatbot answers from internal policy PDFs in S3 with citations, grounded in latest docs, no custom training, managed approach. BEST?",
+          "options": [
+            "Use Amazon Comprehend to extract key phrases and have Bedrock answer from keywords",
+            "Use Amazon Bedrock Knowledge Bases to implement RAG over the S3 documents with source citations",
+            "Fine-tune an Amazon Bedrock foundation model on the policy PDFs and prompt it to include citations",
+            "Use Amazon Rekognition to analyze the PDFs and generate answers from detected text"
+          ],
+          "answerIndexes": [
+            1
+          ],
+          "multi": false,
+          "explanation": "Bedrock Knowledge Bases RAG grounds answers and supports citations without fine-tuning."
+        },
+        {
+          "id": "q29",
+          "text": "Which statement is INCORRECT about recommendation/personalization on AWS?",
+          "options": [
+            "Amazon Personalize can generate personalized item recommendations from user-item interaction data.",
+            "Amazon Personalize can ingest real-time user events to reflect recent behavior in recommendations.",
+            "Next-best product or content is a common personalization use case that ranks items for each user.",
+            "Amazon Personalize requires fine-tuning a foundation model in Amazon Bedrock to make recommendations."
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Personalize does not require Bedrock fine-tuning."
+        },
+        {
+          "id": "q30",
+          "text": "Evaluating English-to-Spanish MT against human references. Most appropriate metric?",
+          "options": [
+            "Perplexity; measures how well a model predicts the next token",
+            "F1 score; measures the balance of precision and recall for labels",
+            "ROUGE; measures n-gram overlap between model output and references",
+            "BLEU; measures n-gram overlap between model output and reference translations"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "BLEU is the standard automatic MT metric vs reference translations."
+        },
+        {
+          "id": "q31",
+          "text": "Which option best describes prompt injection risk when using an FM in an application?",
+          "options": [
+            "A user repeatedly requests policy-violating content until the model complies",
+            "The model generates plausible but incorrect content due to uncertainty",
+            "Malicious input that manipulates the model to ignore prior instructions or reveal data",
+            "An attacker takes over the model hosting endpoint by exploiting an OS vulnerability"
+          ],
+          "answerIndexes": [
+            2
+          ],
+          "multi": false,
+          "explanation": "Prompt injection hijacks instruction-following via crafted untrusted text."
+        },
+        {
+          "id": "q32",
+          "text": "Team starts with a smaller Bedrock model, moves to larger only if quality is insufficient. Which principle?",
+          "options": [
+            "Use retrieval-augmented generation (RAG) to improve factual accuracy",
+            "Fine-tune a model to learn the organization’s writing style",
+            "Right-size the model by balancing model size with required output quality",
+            "Apply safety guardrails to reduce harmful or noncompliant outputs"
+          ],
+          "answerIndexes": [
+            2
+          ],
+          "multi": false,
+          "explanation": "Right-sizing trades cost/latency vs quality by starting small."
+        },
+        {
+          "id": "q33",
+          "text": "Predict next week’s product demand as a numeric value (0–10,000 units). Which ML problem type?",
+          "options": [
+            "Reinforcement learning",
+            "Binary classification",
+            "Clustering",
+            "Regression"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Continuous numeric targets are regression problems."
+        },
+        {
+          "id": "q34",
+          "text": "Retail review classifier fine-tuned on airline emails for the same classification task. Which principle?",
+          "options": [
+            "Retrieval-augmented generation (RAG)",
+            "Prompt engineering",
+            "Domain adaptation",
+            "Transfer learning to a new task"
+          ],
+          "answerIndexes": [
+            2
+          ],
+          "multi": false,
+          "explanation": "Same task, different domain = domain adaptation."
+        },
+        {
+          "id": "q35",
+          "text": "Which statement is INCORRECT about mitigating prompt risks with Amazon Bedrock?",
+          "options": [
+            "Treat the system prompt as controlled server-side configuration",
+            "Use Bedrock Guardrails to block disallowed topics and PII",
+            "Grant the app bedrock:* to avoid authorization failures",
+            "Filter and validate user input to reduce prompt injection"
+          ],
+          "answerIndexes": [
+            2
+          ],
+          "multi": false,
+          "explanation": "bedrock:* violates least privilege and increases blast radius."
+        },
+        {
+          "id": "q36",
+          "text": "Auditors want official AWS SOC/ISO reports and ability to review/accept agreements (e.g., BAA) without a support case. Which TWO actions? (Select TWO)",
+          "options": [
+            "Encrypt all data stores with AWS KMS customer managed keys (CMKs)",
+            "Use AWS Artifact Agreements to review and accept applicable AWS agreements",
+            "Use AWS Artifact to download AWS compliance reports",
+            "Use AWS Config conformance packs to prove resources match compliance frameworks",
+            "Add Amazon Bedrock Guardrails to enforce safety policies during inference",
+            "Enable AWS CloudTrail to produce audit evidence of Bedrock model invocations"
+          ],
+          "answerIndexes": [
+            1,
+            2
+          ],
+          "multi": true,
+          "explanation": "AWS Artifact provides compliance reports; Artifact Agreements handles BAAs."
+        },
+        {
+          "id": "q37",
+          "text": "After launch, team reviews transcripts, ratings, failure cases, then updates prompts/Guardrails/KB and re-evaluates. Which FM lifecycle principle?",
+          "options": [
+            "Iteration and feedback loops to improve quality and safety over time",
+            "Least privilege to minimize access to model invocation APIs",
+            "Transparency by publishing model architecture and weights",
+            "Data governance by enforcing data retention and lineage controls"
+          ],
+          "answerIndexes": [
+            0
+          ],
+          "multi": false,
+          "explanation": "Observe → evaluate → refine is an iterative feedback loop."
+        },
+        {
+          "id": "q38",
+          "text": "Which statement is INCORRECT about data lineage and cataloging for AI auditability on AWS?",
+          "options": [
+            "Data lineage lets you stop using AWS CloudTrail because lineage proves who accessed data.",
+            "Catalog/metadata services (Glue Data Catalog or DataZone) can help document dataset provenance.",
+            "A data catalog centralizes dataset metadata such as schema, owner, and classifications.",
+            "Data lineage can show a dataset’s source, transformations, and downstream usage."
+          ],
+          "answerIndexes": [
+            0
+          ],
+          "multi": false,
+          "explanation": "Lineage ≠ access logs; CloudTrail is still needed for who accessed what."
+        },
+        {
+          "id": "q39",
+          "text": "Pilot: hallucination 18%, jailbreak 12%, unsafe 6%, PII leakage 2/200. Best next step before production?",
+          "options": [
+            "Add safety and grounding mitigations before launch",
+            "Remove all user context from prompts to improve response accuracy",
+            "Deploy as-is because the model passed a pilot evaluation",
+            "Increase the model temperature to reduce refusals"
+          ],
+          "answerIndexes": [
+            0
+          ],
+          "multi": false,
+          "explanation": "Measured safety/privacy risks require mitigations before release."
+        },
+        {
+          "id": "q40",
+          "text": "Amazon Q Business deployment. Which TWO choices are NOT appropriate and increase risk? (Select TWO.)",
+          "options": [
+            "Create separate Q Business apps for HR and Engineering",
+            "Turn off CloudTrail/audit logs for Amazon Q Business",
+            "Limit data sources to approved repositories and encrypt with KMS",
+            "Index all repositories using a shared credential, ignoring ACLs",
+            "Use IAM Identity Center groups to control who can use Q Business",
+            "Configure connectors to enforce source document ACLs per user"
+          ],
+          "answerIndexes": [
+            1,
+            3
+          ],
+          "multi": true,
+          "explanation": "Disabling audit logs and ignoring ACLs with shared credentials are unsafe."
+        },
+        {
+          "id": "q41",
+          "text": "Which statement is INCORRECT about prompt engineering with an FM in Amazon Bedrock?",
+          "options": [
+            "It crafts instructions to steer the FM’s output.",
+            "It complements controls like Bedrock Guardrails for safety.",
+            "Constraints and examples can improve response format adherence.",
+            "Prompt engineering permanently retrains the FM’s weights."
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Prompting steers inference; it does not retrain weights."
+        },
+        {
+          "id": "q42",
+          "text": "Which TWO statements about deep learning / neural networks / ML are INCORRECT? (Select TWO.)",
+          "options": [
+            "A neural network is considered “deep” even if it has only a single layer of learnable weights.",
+            "Deep learning is not part of ML; it is a separate approach outside ML.",
+            "A neural network can be used for classification and regression depending on configuration.",
+            "Neural networks are one family of ML models; deep learning typically uses neural networks with many layers.",
+            "ML includes many model types; deep learning is one approach within ML often strong on images/text.",
+            "Deep learning commonly uses neural networks with multiple layers to learn hierarchical representations."
+          ],
+          "answerIndexes": [
+            0,
+            1
+          ],
+          "multi": true,
+          "explanation": "Deep learning is within ML; “deep” implies multiple layers."
+        },
+        {
+          "id": "q43",
+          "text": "Amazon Q Developer rollout. Which TWO practices are NOT appropriate? (Select TWO.)",
+          "options": [
+            "Limit repository context access to least-privilege read-only and require reviews",
+            "Enable AWS CloudTrail and store logs centrally for audit retention",
+            "Use IAM Identity Center groups to control who can use Amazon Q Developer",
+            "Disable CloudTrail for Amazon Q Developer to reduce logging costs",
+            "Train developers not to include secrets or customer PII in prompts",
+            "Use one shared admin IAM user for all Amazon Q Developer access"
+          ],
+          "answerIndexes": [
+            3,
+            5
+          ],
+          "multi": true,
+          "explanation": "Disabling CloudTrail and shared admin credentials violate governance."
+        },
+        {
+          "id": "q44",
+          "text": "Which TWO statements about data preprocessing for ML are INCORRECT? (Select TWO.)",
+          "options": [
+            "Preprocessing should use only training data statistics to avoid leakage.",
+            "Cleaning inconsistent labels and duplicates reduces noise in training data.",
+            "Handling missing values can prevent training failures and biased patterns.",
+            "You should always delete any row with missing values.",
+            "Most ML algorithms automatically handle missing values and scale.",
+            "Normalization can help scale-sensitive models converge and compare features."
+          ],
+          "answerIndexes": [
+            3,
+            4
+          ],
+          "multi": true,
+          "explanation": "Always-delete and “algorithms auto-handle missing/scale” are incorrect."
+        },
+        {
+          "id": "q45",
+          "text": "Subtle context-dependent bias/harm in Bedrock chatbot. Control best suited to detect these issues?",
+          "options": [
+            "Conduct periodic human audits of sampled conversations",
+            "Rely on automated toxicity and bias scores in testing",
+            "Enable Bedrock Guardrails to block unsafe content",
+            "Monitor CloudWatch metrics and set operational alarms"
+          ],
+          "answerIndexes": [
+            0
+          ],
+          "multi": false,
+          "explanation": "Human audits catch subtle, context-dependent bias better than scores alone."
+        },
+        {
+          "id": "q46",
+          "text": "When iterating Bedrock prompts, which practices help experiment systematically? (Select TWO.)",
+          "options": [
+            "Avoid logging outputs; rely on memory during iterations",
+            "Use a fixed evaluation set and rerun after each change",
+            "Increase temperature to reduce hallucinations",
+            "Use only the model’s self-grading to compare prompts",
+            "Change one prompt element at a time and version it",
+            "Judge prompt quality using only a single “best-case” example"
+          ],
+          "answerIndexes": [
+            1,
+            4
+          ],
+          "multi": true,
+          "explanation": "Fixed eval set + one-change-at-a-time versioning enables controlled comparison."
+        },
+        {
+          "id": "q47",
+          "text": "Which statement is INCORRECT about qualitative GenAI criteria (helpfulness, accuracy, relevance, safety)?",
+          "options": [
+            "Helpfulness evaluates whether the response addresses the user’s intent and is actionable.",
+            "Accuracy evaluates whether claims are factually correct and can be validated against reliable sources.",
+            "Relevance evaluates whether the response stays on-topic and uses any provided context appropriately.",
+            "Safety checks can be skipped if an answer is helpful and accurate."
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Safety is a separate required dimension and cannot be skipped."
+        },
+        {
+          "id": "q48",
+          "text": "Non-coding marketing analysts need quick GenAI prototypes (e.g., product-description generator) to share. Best AWS offering?",
+          "options": [
+            "AWS Amplify hosting with a custom web UI that calls Amazon Bedrock",
+            "Amazon Bedrock PartyRock",
+            "Amazon Bedrock InvokeModel API integrated into an AWS Lambda function",
+            "Amazon SageMaker AI Studio to develop and deploy a custom model endpoint"
+          ],
+          "answerIndexes": [
+            1
+          ],
+          "multi": false,
+          "explanation": "PartyRock is the low-code/no-code GenAI playground for rapid prototypes."
+        },
+        {
+          "id": "q49",
+          "text": "Which TWO statements about classification metrics are INCORRECT? (Select TWO.)",
+          "options": [
+            "F1 is best when true negatives matter most.",
+            "F1 is the harmonic mean of precision and recall.",
+            "AUC-ROC summarizes ranking across all classification thresholds.",
+            "AUC-ROC requires choosing one threshold like accuracy does.",
+            "Accuracy can look high on heavily imbalanced classes.",
+            "Accuracy is the fraction of all predictions that are correct."
+          ],
+          "answerIndexes": [
+            0,
+            3
+          ],
+          "multi": true,
+          "explanation": "F1 ignores true negatives; AUC-ROC does not require a single threshold."
+        },
+        {
+          "id": "q50",
+          "text": "When calling an FM in Bedrock, what is the main effect of setting a low maximum output length?",
+          "options": [
+            "The model can no longer use long input prompts or retrieved context",
+            "The model must be retrained to support longer responses",
+            "The model becomes more accurate because it is forced to be concise",
+            "Responses can be truncated, and allowing longer outputs can increase per-call cost"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Max output tokens can truncate answers; more tokens raise cost."
+        },
+        {
+          "id": "q51",
+          "text": "Nightly segment top-10 on one EC2; need per-user recommendations adapting to recent clicks within minutes, low ops, predictable cost. Best change?",
+          "options": [
+            "Use Amazon Personalize for real-time, per-user recommendations",
+            "Cache the segment-based recommendation lists with Amazon CloudFront to reduce latency",
+            "Use a foundation model in Amazon Bedrock to generate recommendations from the full catalog for each page view",
+            "Keep the batch job but add an EC2 Auto Scaling group to run more nightly workers"
+          ],
+          "answerIndexes": [
+            0
+          ],
+          "multi": false,
+          "explanation": "Amazon Personalize is built for scalable real-time personalization."
+        },
+        {
+          "id": "q52",
+          "text": "Which governance framework helps scope/assess security risks of generative AI workloads (data, model, prompts, apps)?",
+          "options": [
+            "Generative AI Security Scoping Matrix",
+            "AWS Artifact",
+            "AWS Well-Architected Framework",
+            "IAM Access Analyzer"
+          ],
+          "answerIndexes": [
+            0
+          ],
+          "multi": false,
+          "explanation": "The Generative AI Security Scoping Matrix is GenAI-specific risk scoping."
+        },
+        {
+          "id": "q53",
+          "text": "Bedrock drafts customer-facing responses that could affect refunds/account actions. When is human-in-the-loop needed?",
+          "options": [
+            "Use Bedrock Guardrails so humans are not required for any outputs",
+            "Fine-tune the model so oversight is only needed during training",
+            "Enable RAG so the model never needs human review",
+            "Add a human review/approval step before high-impact actions or external responses"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "High-impact customer/financial actions need human approval."
+        },
+        {
+          "id": "q54",
+          "text": "Exhibit: XGBoost training, gradient boosting trees, model.tar.gz with trained trees+weights loaded by endpoint. Best distinction of model vs algorithm?",
+          "options": [
+            "Algorithm is the S3 bucket; model is the endpoint",
+            "Algorithm is the learned weights; model is the training container",
+            "Algorithm is model.tar.gz; model is gradient boosting",
+            "Algorithm is XGBoost; model is the trained model.tar.gz"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Algorithm = learning method; model = trained artifact."
+        },
+        {
+          "id": "q55",
+          "text": "Churn feature engineering: which TWO actions are NOT appropriate (anti-patterns/unsafe)? (Select TWO.)",
+          "options": [
+            "Normalize numeric fields such as monthly charges before training",
+            "Engineer features in a local spreadsheet and overwrite the S3 dataset without versioning or an audit trail",
+            "Bucket customer tenure into ranges to reduce outlier sensitivity",
+            "One-hot encode contract type and payment method",
+            "Use raw customer email address and full name as model input features",
+            "Create a feature for total support tickets in the last 90 days"
+          ],
+          "answerIndexes": [
+            1,
+            4
+          ],
+          "multi": true,
+          "explanation": "Unaudited overwrites and using raw PII as features are unsafe/anti-patterns."
+        },
+        {
+          "id": "q56",
+          "text": "Which TWO situations are poor fits for GenAI (need deterministic outcomes, strict constraints, minimal error tolerance)? (Select TWO.)",
+          "options": [
+            "Summarize support chats while masking PII using guardrails",
+            "Make final loan approvals/denials under audited regulatory rules",
+            "Generate multiple marketing taglines for an upcoming campaign",
+            "Answer employee policy questions using a cited internal knowledge base",
+            "Let GenAI automatically decide and block card transactions in real time",
+            "Draft clinician visit summaries for review before filing"
+          ],
+          "answerIndexes": [
+            1,
+            4
+          ],
+          "multi": true,
+          "explanation": "Final regulated credit decisions and real-time fraud blocking need deterministic systems."
+        },
+        {
+          "id": "q57",
+          "text": "Must inspect model artifacts for transparency and confirm commercial use; reduce ops effort. Best change from closed third-party LLM API?",
+          "options": [
+            "Download an open-source model from the internet and deploy on self-managed EC2 without reviewing the license",
+            "Adopt an open-source model in SageMaker JumpStart and verify its license permits commercial use and required attributions",
+            "Fine-tune the closed LLM API on company data to improve explainability",
+            "Keep the closed LLM API and rely on the vendor’s model card for transparency"
+          ],
+          "answerIndexes": [
+            1
+          ],
+          "multi": false,
+          "explanation": "JumpStart open-source + license verification balances transparency and lower ops."
+        },
+        {
+          "id": "q58",
+          "text": "SageMaker Model Cards record intended use, data origins, evaluation, limitations. Which responsible AI principle?",
+          "options": [
+            "Least privilege for controlling who can invoke the model",
+            "Defense in depth by adding multiple security layers",
+            "Data minimization by reducing the amount of data collected",
+            "Transparency through clear model documentation"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Model Cards primarily support transparency."
+        },
+        {
+          "id": "q59",
+          "text": "Which statement best describes model distillation and why it is used?",
+          "options": [
+            "Training a smaller student model to mimic a larger teacher model to reduce latency and cost",
+            "Retrieving enterprise documents at inference time to ground responses and reduce hallucinations",
+            "Adding safety filters to block restricted content in model inputs and outputs",
+            "Fine-tuning a foundation model on labeled data to improve accuracy on a specific task"
+          ],
+          "answerIndexes": [
+            0
+          ],
+          "multi": false,
+          "explanation": "Distillation compresses a teacher into a smaller, faster student."
+        },
+        {
+          "id": "q60",
+          "text": "Bank GenAI drafts loan recommendations; concerned about bias. Which action should the bank AVOID?",
+          "options": [
+            "Continuously monitor approval rates by segment to detect drift",
+            "Evaluate recommendations for bias across protected groups before launch",
+            "Keep a human loan officer as the final decision maker for edge cases",
+            "Automate approvals with no bias evaluation or applicant appeal process"
+          ],
+          "answerIndexes": [
+            3
+          ],
+          "multi": false,
+          "explanation": "Fully automating high-stakes lending without bias checks/appeals is an anti-pattern."
+        },
+        {
+          "id": "q61",
+          "text": "Fine-tune on support chats; must prove approved source systems and remove a customer’s records if requested. Best approach?",
+          "options": [
+            "Fine-tune mostly on synthetic examples; skip tracking original sources",
+            "Fine-tune on all available logs; discard the raw source records",
+            "Fine-tune using a versioned, curated dataset with documented lineage",
+            "Use RAG and ignore training-data lineage for the fine-tune"
+          ],
+          "answerIndexes": [
+            2
+          ],
+          "multi": false,
+          "explanation": "Versioned curated data with lineage supports auditability and deletion requests."
+        },
+        {
+          "id": "q62",
+          "text": "Bedrock chatbot: prevent PII in/out, block harmful content, answer only from approved policy docs with citations. BEST least-ops solution?",
+          "options": [
+            "Encrypt all prompts and responses with AWS KMS customer managed keys",
+            "Use Amazon Bedrock Guardrails with sensitive info, topic, and grounding controls",
+            "Run Amazon Comprehend on responses to detect toxicity before displaying them",
+            "Fine-tune a custom model in Amazon SageMaker AI to follow company policies"
+          ],
+          "answerIndexes": [
+            1
+          ],
+          "multi": false,
+          "explanation": "Guardrails cover PII, topics, and grounding with low operational overhead."
+        },
+        {
+          "id": "q63",
+          "text": "Compliance assistant needs citations and auditors must trace to exact document location/version; keep docs private; minimize custom development. BEST?",
+          "options": [
+            "Use Amazon Comprehend to extract entities and generate answers from them",
+            "Use Amazon Bedrock Knowledge Bases (RAG) with S3 versioning and citations",
+            "Fine-tune a foundation model on policies and disable retrieval",
+            "Use Bedrock Guardrails only to enforce safe, policy-compliant responses"
+          ],
+          "answerIndexes": [
+            1
+          ],
+          "multi": false,
+          "explanation": "KB RAG + S3 versioning provides grounded citations and provenance."
+        },
+        {
+          "id": "q64",
+          "text": "Regression for equipment failures; IoT data has duplicates, different scales, missing values. Which preprocessing statement is INCORRECT?",
+          "options": [
+            "Skip preprocessing because managed ML algorithms will automatically clean, normalize, and handle missing values without impact.",
+            "Clean the dataset to remove duplicates and obvious data-entry errors before training.",
+            "Normalize or standardize numeric features so differences in scale do not skew learning.",
+            "Handle missing values (impute or remove) and record the approach to reduce training issues."
+          ],
+          "answerIndexes": [
+            0
+          ],
+          "multi": false,
+          "explanation": "Managed ML does not remove the need for proper preprocessing."
+        },
+        {
+          "id": "q65",
+          "text": "Where do feedback loops/iteration occur in the FM lifecycle and why do they matter?",
+          "options": [
+            "They occur only during initial model pretraining because that is when the model learns from data",
+            "They are generally unnecessary once a model is selected because inference behavior is fixed",
+            "They continue after deployment by monitoring outputs and user feedback to refine prompts/guardrails and improve quality and safety",
+            "They are needed only when building a supervised ML model with labeled data, not for FMs"
+          ],
+          "answerIndexes": [
+            2
+          ],
+          "multi": false,
+          "explanation": "Post-deployment monitoring and iteration sustain quality and safety."
+        }
+      ]
+    }
+  ]
+}

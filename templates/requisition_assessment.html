@@ -1,0 +1,253 @@
+<style>
+  .q-card { background: var(--surface-card, #ffffff); border: 1px solid var(--border-color, #e3e8ef); border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(16, 24, 40, 0.03); }
+  .q-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .q-text { font-size: 1.05rem; font-weight: 600; color: var(--ink-900, #0f2547); line-height: 1.6; padding-right: 20px;}
+  .q-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+  .option-list { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+  .option-row { display: flex; align-items: center; padding: 12px 16px; border-radius: 8px; background: #f8fafc; border: 1px solid var(--border-color, #e3e8ef); font-size: 0.95rem; color: var(--text-main, #16233d); }
+  .option-letter { font-weight: 700; color: var(--text-muted, #667085); width: 24px; }
+  .option-row.correct { background: rgba(31, 157, 85, 0.06); border-color: var(--success, #1f9d55); color: var(--success, #1f9d55); font-weight: 600; }
+  .option-row.correct .option-letter { color: var(--success, #1f9d55); }
+
+  .text-answer-box { background: #f1f5f9; border-left: 4px solid #2f6fed; padding: 16px; border-radius: 0 8px 8px 0; margin-top: 15px; font-size: 0.95rem; color: #0f2547; }
+  .code-editor-preview { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.9rem; margin-top: 15px; overflow-x: auto; }
+
+  .btn-edit { background: rgba(47, 111, 237, 0.1); color: #2f6fed; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 0.8rem; }
+  .btn-edit:hover { background: #2f6fed; color: #fff; }
+  .btn-delete { background: rgba(214, 69, 69, 0.1); color: #d64545; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 0.8rem; }
+  .btn-delete:hover { background: #d64545; color: #fff; }
+  .btn-theme { background-color: var(--ink-900, #0f2547); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .btn-theme:hover { background-color: var(--ink-700, #163862); color: #fff; }
+  .form-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted, #667085); font-weight: 600; margin-bottom: 6px; }
+  .form-control, .form-select { border-color: var(--border-color, #e3e8ef); border-radius: 8px; font-size: 0.9rem; padding: 10px 14px; }
+</style>
+
+<div class="dash-wrap">
+  <div class="dash-heading" style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; flex-wrap: wrap; gap: 15px;">
+    <div>
+      <h2 style="font-size: 1.6rem; font-weight: 700; color: var(--ink-900, #0f2547); margin: 0;">Level 2 Assessment</h2>
+      <p style="color: var(--text-muted, #667085); margin: 4px 0 0; font-size: 0.9rem;">For Requisition: <strong>{{ requisition.job_title }} (#{{ requisition_id }})</strong> | Total Questions: {{ questions|length }}</p>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <button class="btn-theme" data-bs-toggle="modal" data-bs-target="#questionModal" onclick="prepareAddModal()">
+        + Add Question
+      </button>
+      <a href="{{ url_for('view_requisition_details', requisition_id=requisition_id) }}" class="btn btn-outline-secondary" style="border-radius: 8px; padding: 10px 20px; white-space: nowrap;">Back to Requisition</a>
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show" role="alert" style="border-radius: 12px;">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div>
+    {% for q in questions %}
+    <div class="q-card">
+      <div class="q-header">
+        <div>
+          <span style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; background: #e5e7eb; color: #4b5563; display: inline-block;">{{ q.question_type | default('MCQ_TEXT') | upper }}</span>
+          <div class="q-text">Q{{ loop.index }}: {{ q.question_text }}</div>
+          <span style="font-size: 0.75rem; background: #eef1f6; padding: 4px 8px; border-radius: 6px; color: #475467; display: inline-block; margin-top: 8px;">Difficulty: {{ q.difficulty }}</span>
+        </div>
+        <div class="q-actions">
+          <button class="btn-edit" onclick='prepareEditModal({{ q | tojson | safe }})'>Edit</button>
+          <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this question?');">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="qid" value="{{ q.id }}">
+            <button type="submit" class="btn-delete">Delete</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- RENDER BASED ON TYPE -->
+      {% if q.question_type in ['MCQ_TEXT', 'MCQ_CODE'] or not q.question_type %}
+        <div class="option-list">
+          {% for letter, opt in [('A', q.option_a), ('B', q.option_b), ('C', q.option_c), ('D', q.option_d)] %}
+            {% if opt %}
+            <div class="option-row {% if q.correct_option == letter %}correct{% endif %}">
+              <span class="option-letter">{{ letter }}.</span>
+              <span>{{ opt }}</span>
+              {% if q.correct_option == letter %}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-left: auto;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              {% endif %}
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        {% if q.code_snippet %}
+        <div class="code-editor-preview" style="margin-top: 10px;">
+          {{ q.code_snippet }}
+        </div>
+        {% endif %}
+
+      {% elif q.question_type == 'TEXT' %}
+        <div class="text-answer-box">
+          <strong>Expected Answer / Grading Guide:</strong><br>
+          {{ q.expected_answer or 'N/A' }}
+        </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+      <p class="text-muted">No questions found in this assessment.</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="questionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 16px; border: none;">
+            <form method="POST" id="questionForm">
+                <input type="hidden" name="action" id="modal_action" value="add">
+                <input type="hidden" name="qid" id="modal_qid" value="">
+
+                <div class="modal-header" style="padding: 20px 24px; border-bottom: 1px solid var(--border-color, #e3e8ef);">
+                    <h5 class="modal-title" id="modalTitle" style="font-weight: 700; color: var(--ink-900, #0f2547);">Add New Question</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body" style="padding: 24px; max-height: 70vh; overflow-y: auto;">
+
+                    <div class="mb-4">
+                        <label class="form-label">Question Type</label>
+                        <select name="question_type" id="modal_q_type" class="form-select" onchange="toggleQuestionTypeFields()">
+                            <option value="MCQ_TEXT">Multiple Choice (MCQ)</option>
+                            <option value="MCQ_CODE">Code + MCQ</option>
+                            <option value="TEXT">Text / Subjective</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Question Text</label>
+                        <textarea name="question_text" id="modal_q_text" class="form-control" rows="3" required></textarea>
+                    </div>
+
+                    <div id="fields-mcq">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Option A</label>
+                                <input type="text" name="option_a" id="modal_opt_a" class="form-control">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Option B</label>
+                                <input type="text" name="option_b" id="modal_opt_b" class="form-control">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Option C</label>
+                                <input type="text" name="option_c" id="modal_opt_c" class="form-control">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Option D</label>
+                                <input type="text" name="option_d" id="modal_opt_d" class="form-control">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Correct Option</label>
+                                <select name="correct_option" id="modal_correct" class="form-select">
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                    <option value="D">D</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="fields-code" style="display: none;">
+                        <div class="mb-3">
+                            <label class="form-label">Code Snippet</label>
+                            <textarea name="code_snippet" id="modal_code_snippet" class="form-control" rows="4" placeholder="Paste code here..."></textarea>
+                        </div>
+                    </div>
+
+                    <div id="fields-text" style="display: none;">
+                        <div class="mb-3">
+                            <label class="form-label">Expected Answer / Grading Guide</label>
+                            <textarea name="expected_answer" id="modal_expected_answer" class="form-control" rows="3" placeholder="What constitutes a correct answer?"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="row mt-2">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Difficulty</label>
+                            <select name="difficulty" id="modal_difficulty" class="form-select" required>
+                                <option value="Easy">Easy</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Hard">Hard</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-color, #e3e8ef); background: #f8fafc; border-radius: 0 0 16px 16px;">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-theme">Save Question</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleQuestionTypeFields() {
+    const type = document.getElementById('modal_q_type').value;
+    document.getElementById('fields-mcq').style.display = (type === 'MCQ_TEXT' || type === 'MCQ_CODE') ? 'block' : 'none';
+    document.getElementById('fields-code').style.display = (type === 'MCQ_CODE') ? 'block' : 'none';
+    document.getElementById('fields-text').style.display = (type === 'TEXT') ? 'block' : 'none';
+
+    if (type === 'TEXT') {
+        document.getElementById('modal_opt_a').required = false;
+        document.getElementById('modal_opt_b').required = false;
+        document.getElementById('modal_correct').required = false;
+    } else {
+        document.getElementById('modal_opt_a').required = true;
+        document.getElementById('modal_opt_b').required = true;
+        document.getElementById('modal_correct').required = true;
+    }
+}
+
+function prepareAddModal() {
+    document.getElementById('modalTitle').innerText = 'Add New Question';
+    document.getElementById('modal_action').value = 'add';
+    document.getElementById('modal_qid').value = '';
+    document.getElementById('questionForm').reset();
+    document.getElementById('modal_q_type').value = 'MCQ_TEXT';
+    toggleQuestionTypeFields();
+}
+
+function prepareEditModal(data) {
+    document.getElementById('modalTitle').innerText = 'Edit Question';
+    document.getElementById('modal_action').value = 'edit';
+    document.getElementById('modal_qid').value = data.id;
+
+    const qType = data.question_type || 'MCQ_TEXT';
+    document.getElementById('modal_q_type').value = qType;
+
+    document.getElementById('modal_q_text').value = data.question_text || '';
+    document.getElementById('modal_opt_a').value = data.option_a || '';
+    document.getElementById('modal_opt_b').value = data.option_b || '';
+    document.getElementById('modal_opt_c').value = data.option_c || '';
+    document.getElementById('modal_opt_d').value = data.option_d || '';
+    document.getElementById('modal_correct').value = data.correct_option || 'A';
+    document.getElementById('modal_code_snippet').value = data.code_snippet || '';
+    document.getElementById('modal_expected_answer').value = data.expected_answer || '';
+    document.getElementById('modal_difficulty').value = data.difficulty || 'Medium';
+
+    toggleQuestionTypeFields();
+
+    var myModal = new bootstrap.Modal(document.getElementById('questionModal'));
+    myModal.show();
+}
+</script>

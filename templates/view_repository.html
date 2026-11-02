@@ -9,12 +9,15 @@
 <style>
   body {
     background-color: #f8fafc;
+    overflow-x: hidden;
   }
+
   h2 {
     text-align: center;
     margin-top: 20px;
     font-weight: bold;
   }
+
   .dataTables_wrapper {
     padding: 0 20px;
   }
@@ -24,11 +27,31 @@
     right: 150px;
     margin: 0;
   }
+
+  .table-responsive-fixed {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-top: 10px;
+  }
+
+  /* Space between filters and table */
+  .filter-controls {
+    margin-bottom: 15px;
+  }
+
+  /* Fixed position of DataTables controls */
+  div.dataTables_wrapper div.dataTables_length,
+  div.dataTables_wrapper div.dataTables_filter {
+    position: relative;
+    z-index: 10;
+    background-color: #f8fafc;
+    padding-top: 10px;
+  }
+
 </style>
 
 <div class="container mt-3">
   <div class="d-flex justify-content-end">
-    <!-- Button to trigger modal -->
     <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addProfileModal">
       Add Profile
     </button>
@@ -37,7 +60,7 @@
 
 <h2>Candidate Repository</h2>
 
-<div class="container my-3">
+<div class="container my-3 filter-controls">
   <div class="row justify-content-center align-items-center g-2">
     <div class="col-md-3">
       <input type="text" id="repoNameSearch" placeholder="Search by Name" class="form-control form-control-sm" />
@@ -51,99 +74,67 @@
   </div>
 </div>
 
-<table id="repoTable" class="display table table-bordered table-striped">
-  <thead>
-    <tr>
-      <th>Date</th><th>Name</th><th>Email</th><th>Contact Number</th>
-      <th>Total Exp</th><th>Current Location</th><th>Skills</th>
-      <th>Current CTC</th><th>Expected CTC</th><th>Source</th><th>Resume</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for profile in profiles %}
-    <tr>
-      <td>{{ profile.date }}</td>
-      <td>{{ profile.name }}</td>
-      <td>{{ profile.email_id }}</td>
-      <td>{{ profile.contact_number }}</td>
-      <td>{{ profile.dynamic_exp }}</td>
-      <td>{{ profile.current_loc }}</td>
-      <td>{{ profile.skills }}</td>
-      <td>{{ profile.current_ctc }}</td>
-      <td>{{ profile.exp_ctc }}</td>
-      <td>{{ profile.source }}</td>
-      <td>
-        <a href="{{ url_for('download_cv', profile_id=profile.profile_id) }}" target="_blank" class="btn btn-link btn-sm">View CV</a>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-responsive-fixed">
+  <table id="repoTable" class="display table table-bordered table-striped w-100">
+    <thead>
+      <tr>
+        <th>Date</th><th>Name</th><th>Email</th><th>Contact Number</th>
+        <th>Total Exp</th><th>Current Location</th><th>Skills</th>
+        <th>Current CTC</th><th>Expected CTC</th><th>Source</th><th>Resume</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for profile in profiles %}
+      <tr>
+        <td>{{ profile.date }}</td>
+        <td>{{ profile.name }}</td>
+        <td>{{ profile.email_id }}</td>
+        <td>{{ profile.contact_number }}</td>
+        <td>{{ profile.dynamic_exp }}</td>
+        <td>{{ profile.current_loc }}</td>
+        <td>{{ profile.skills }}</td>
+        <td>{{ profile.current_ctc }}</td>
+        <td>{{ profile.exp_ctc }}</td>
+        <td>{{ profile.source }}</td>
+        <td>
+          <a href="{{ url_for('download_cv', profile_id=profile.profile_id) }}" target="_blank" class="btn btn-link btn-sm">View CV</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 
-    <!-- Modal -->
-    <div class="modal fade" id="addProfileModal" tabindex="-1" aria-labelledby="addProfileModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-right">
-        <div class="modal-content">
-        <form method="POST" action="{{ url_for('submit_job_profile') }}" enctype="multipart/form-data">
-            <div class="modal-header">
-            <h5 class="modal-title" id="addProfileModalLabel">Add New Profile</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
+<!-- Modal for adding profile -->
+<div class="modal fade" id="addProfileModal" tabindex="-1" aria-labelledby="addProfileModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-right">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('submit_job_profile') }}" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addProfileModalLabel">Add New Profile</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
 
-            <div class="modal-body">
-            <div class="row g-3">
-                <div class="col-md-6">
-                <label class="form-label">Date</label>
-                <input type="date" name="date" class="form-control" required>
-                </div>
-                <div class="col-md-6">
-                <label class="form-label">Name</label>
-                <input type="text" name="name" class="form-control" required>
-                </div>
-                <div class="col-md-6">
-                <label class="form-label">Email</label>
-                <input type="email" name="email_id" class="form-control" required>
-                </div>
-                <div class="col-md-6">
-                <label class="form-label">Contact Number</label>
-                <input type="text" name="contact_number" class="form-control" required>
-                </div>
-                <div class="col-md-6">
-                <label class="form-label">Total Experience (Years)</label>
-                <input type="text" name="total_exp" class="form-control" required>
-                </div>
-                <div class="col-md-6">
-                <label class="form-label">Current Location</label>
-                <input type="text" name="current_loc" class="form-control" required>
-                </div>
-                <div class="col-md-6">
-                <label class="form-label">Skills</label>
-                <input type="text" name="skills" class="form-control" required>
-                </div>
-                <div class="col-md-6">
-                <label class="form-label">Current CTC</label>
-                <input type="text" name="current_ctc" class="form-control" required>
-                </div>
-                <div class="col-md-6">
-                <label class="form-label">Expected CTC</label>
-                <input type="text" name="exp_ctc" class="form-control" required>
-                </div>
-                <div class="col-md-6">
-                <label class="form-label">Source</label>
-                <input type="text" name="source" class="form-control" required>
-                </div>
-                <div class="col-md-12">
-                <label class="form-label">Resume (PDF/DOC)</label>
-                <input type="file" name="cv" class="form-control" accept=".pdf,.doc,.docx" required>
-                </div>
-            </div>
-            </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Date</label><input type="date" name="date" class="form-control" required></div>
+            <div class="col-md-6"><label class="form-label">Name</label><input type="text" name="name" class="form-control" required></div>
+            <div class="col-md-6"><label class="form-label">Email</label><input type="email" name="email_id" class="form-control" required></div>
+            <div class="col-md-6"><label class="form-label">Contact Number</label><input type="text" name="contact_number" class="form-control" required></div>
+            <div class="col-md-6"><label class="form-label">Total Experience (Years)</label><input type="text" name="total_exp" class="form-control" required></div>
+            <div class="col-md-6"><label class="form-label">Current Location</label><input type="text" name="current_loc" class="form-control" required></div>
+            <div class="col-md-6"><label class="form-label">Skills</label><input type="text" name="skills" class="form-control" required></div>
+            <div class="col-md-6"><label class="form-label">Current CTC</label><input type="text" name="current_ctc" class="form-control" required></div>
+            <div class="col-md-6"><label class="form-label">Expected CTC</label><input type="text" name="exp_ctc" class="form-control" required></div>
+            <div class="col-md-6"><label class="form-label">Source</label><input type="text" name="source" class="form-control" required></div>
+            <div class="col-md-12"><label class="form-label">Resume (PDF/DOC)</label><input type="file" name="cv" class="form-control" accept=".pdf,.doc,.docx" required></div>
+          </div>
+        </div>
 
         <div class="modal-footer">
           <button type="submit" class="btn btn-primary">Save Profile</button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
         </div>
-
       </form>
     </div>
   </div>
@@ -156,7 +147,10 @@
 
 <script>
   $(function () {
-    const table = $('#repoTable').DataTable();
+    const table = $('#repoTable').DataTable({
+      scrollX: true,
+      scrollCollapse: true,
+    });
 
     $('#repoNameSearch').on('keyup', function () {
       table.columns(1).search(this.value).draw();

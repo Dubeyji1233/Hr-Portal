@@ -48,7 +48,12 @@
 
     {% for item in hierarchy %}
         <div class="mb-3">
-            <strong>Level {{ item.level }} - {{ item.interviewer_name }}</strong><br>
+            <strong>
+                Level {{ item.level }} - {{ item.interviewer_name }}
+                {% if item.level in scheduled %}
+                    - {{ scheduled[item.level].interview_type }}
+                {% endif %}
+            </strong><br>
             {% if item.level in scheduled %}
                 📅 Scheduled on: {{ scheduled[item.level].interview_datetime }}<br>
                 <span class="status-tag {{ scheduled[item.level].status }}">{{ scheduled[item.level].status|capitalize }}</span>
@@ -73,6 +78,12 @@
                                     <div class="modal-body">
                                         <div class="mb-3">
                                             <label for="interview_datetime_{{ item.level }}" class="form-label">Interview Date & Time</label>
+                                            <label for="interview_type_{{ item.level }}" class="form-label">Interview Type</label>
+                                            <select class="form-select" id="interview_type_{{ item.level }}" name="interview_type" required>
+                                                {% set current_type = scheduled[item.level].interview_type %}
+                                                <option value="Face to Face" {% if current_type=='Face to Face' %}selected{% endif %}>Face to Face</option>
+                                                <option value="Virtual" {% if current_type=='Virtual' %}selected{% endif %}>Virtual</option>
+                                            </select>                                            
                                             <input type="datetime-local" class="form-control" id="interview_datetime_{{ item.level }}" name="interview_datetime"
                                                 value="{{ scheduled[item.level].interview_datetime.strftime('%Y-%m-%dT%H:%M') }}" required>
                                         </div>
@@ -114,6 +125,14 @@
                 <label class="form-label">Interview Level</label>
                 <input class="form-control" value="Level {{ ns.next_level }}" disabled>
             </div>
+
+            <div class="mb-3">
+                <label for="interview_type" class="form-label">Interview Type</label>
+                <select class="form-select" id="interview_type" name="interview_type" required>
+                    <option value="Face to Face">Face to Face</option>
+                    <option value="Virtual">Virtual</option>
+                </select>
+            </div>            
 
             <div class="mb-3">
                 <label for="interview_datetime" class="form-label">Interview Date & Time</label>

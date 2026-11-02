@@ -1,6 +1,7 @@
-create database hr_portal;
-use hr_portal;
+CREATE DATABASE hr_portal;
+USE hr_portal;
 
+-- USERS TABLE
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -13,39 +14,23 @@ CREATE TABLE users (
     is_active BOOLEAN DEFAULT TRUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-
 select * from users;
-truncate table users;
+DELETE FROM users
+where id = 6;
+
 INSERT INTO users (name, email,password_hash, role, department, is_external, is_active)
 VALUES
 ('Deepa', 'deepa@orientindia.net','Deepa@123', 'hr', 'Human Resources', FALSE, TRUE);
 
 INSERT INTO users (name, email,password_hash, role, department, is_external, is_active)
 VALUES
-('Shubham', 'shubhambhoite@orientindia.net','shubham@123', 'hr', 'Human Resources', FALSE, TRUE);
+('Aastha', 'astha@orientindia.net','astha@123', 'hr', 'Human Resources', FALSE, TRUE);
 
 UPDATE users
-SET role = 'hr'
-WHERE id = 1;
+SET role = 'admin'
+WHERE id = 4;
 
-
-DELETE FROM users
-where id = 1;
-
-
-CREATE TABLE interview_hierarchy (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    requisition_id INT,
-    level INT, -- 1 to 5
-    interviewer_name VARCHAR(255),
-    interviewer_email VARCHAR(255),
-    FOREIGN KEY (requisition_id) REFERENCES requisitions(id)
-);
-
-select * from interview_hierarchy;
-drop table interview_hierarchy;
-truncate table interview_hierarchy;
-
+-- REQUISITIONS TABLE
 CREATE TABLE requisitions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     job_title VARCHAR(255),
@@ -58,68 +43,105 @@ CREATE TABLE requisitions (
     job_description TEXT,
     created_by VARCHAR(255),
     assigned_to VARCHAR(255),
+    status ENUM('Open', 'Closed') DEFAULT 'Open',
+    openings_filled INT DEFAULT 0,
+    comments TEXT,
+    comments_updated_at DATETIME,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-select * from requisitions;
+select * from requisitions; 
 truncate table requisitions;
-drop table requisitions;
-ALTER TABLE requisitions ADD COLUMN status ENUM('Open', 'Closed') DEFAULT 'Open';
-ALTER TABLE requisitions ADD COLUMN openings_filled INT DEFAULT 0;
-alter table requisitions add column comments text;
-ALTER TABLE requisitions ADD COLUMN comments_updated_at DATETIME;
+alter table requisitions add column customer_name varchar(255);
+delete from requisitions
+where id = 1;
 
-SELECT department, SUM(number_of_openings) AS openings, SUM(openings_filled) AS filled
-FROM requisitions
-GROUP BY department;
+ALTER TABLE requisitions
+MODIFY status ENUM('Open', 'Closed', 'On Hold', 'Lost from Customer') DEFAULT 'Open';
+
+ALTER TABLE requisitions ADD COLUMN closed_at DATETIME DEFAULT NULL;
+
+CREATE TABLE requisition_assignments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    requisition_id INT NOT NULL,
+    assigned_to_email VARCHAR(255) NOT NULL,
+    assigned_by_email VARCHAR(255),
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (requisition_id) REFERENCES requisitions(id),
+    FOREIGN KEY (assigned_to_email) REFERENCES users(email),
+    FOREIGN KEY (assigned_by_email) REFERENCES users(email)
+);
+
+-- INTERVIEW HIERARCHY TABLE
+CREATE TABLE interview_hierarchy (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    requisition_id INT,
+    level INT,
+    interviewer_name VARCHAR(255),
+    interviewer_email VARCHAR(255),
+    FOREIGN KEY (requisition_id) REFERENCES requisitions(id)
+);
+
+select * from interview_hierarchy;
+truncate table interview_hierarchy;
+drop table interview_hierarchy;
+delete from interview_hierarchy
+where id = 1;
+
+CREATE TABLE department_utilization (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    requisition_id INT,
+    department_name VARCHAR(255),
+    utilization DECIMAL(5,2),
+    FOREIGN KEY (requisition_id) REFERENCES requisitions(id)
+);
+select * from department_utilization;
+drop table department_utilization;
+delete from department_utilization
+where id = 1;
 
 
 
-
-
+-- CANDIDATES TABLE
 CREATE TABLE candidates (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100),
     email VARCHAR(100),
     phone VARCHAR(15),
-    skills text,
-    resume BLOB,
+    skills TEXT,
+    resume LONGBLOB,
     requisition_id INT,
-    submitted_by varchar(100),
+    submitted_by VARCHAR(100),
     shortlisted_by INT,
     shortlisted_on DATETIME,
     is_shortlisted BOOLEAN DEFAULT FALSE,
+    selection_status ENUM('In Process', 'Rejected', 'Selected') DEFAULT 'In Process',
+    final_ctc DECIMAL(10,2),
+    planned_joining_date DATE,
+    actual_joining_date DATE,
+    offer_letter LONGBLOB NULL,
+    total_exp VARCHAR(150) NOT NULL,
+    current_loc VARCHAR(150) NOT NULL,
+    current_ctc VARCHAR(150) NOT NULL,
+    exp_ctc VARCHAR(150) NOT NULL,
+    source VARCHAR(150) NOT NULL,
     FOREIGN KEY (requisition_id) REFERENCES requisitions(id),
     FOREIGN KEY (submitted_by) REFERENCES users(email),
     FOREIGN KEY (shortlisted_by) REFERENCES users(id)
 );
 
 select * from candidates;
-drop table candidates;
 truncate table candidates;
-ALTER TABLE candidates
-ADD COLUMN selection_status ENUM('In Process', 'Rejected', 'Selected') DEFAULT 'In Process';
-ALTER TABLE candidates
-  ADD COLUMN final_ctc DECIMAL(10,2)     NULL,
-  ADD COLUMN planned_joining_date DATE   NULL,
-  ADD COLUMN actual_joining_date DATE    NULL ;
+drop table candidates;
 
 ALTER TABLE candidates
-  ADD COLUMN offer_letter LONGBLOB NULL;
-  
+ADD COLUMN designation VARCHAR(100) NOT NULL,
+ADD COLUMN notice_period INT NOT NULL,
+ADD COLUMN reason_for_change TEXT NOT NULL;
 ALTER TABLE candidates
-MODIFY COLUMN resume LONGBLOB;
+ADD COLUMN offer_letter_date datetime;
 
-alter table candidates
-add column total_exp VARCHAR(150) NOT NULL,
-add column current_loc VARCHAR(150) NOT NULL,
-add column current_ctc VARCHAR(150) NOT NULL,
-add column exp_ctc VARCHAR(150) NOT NULL,
-add column source VARCHAR(150) NOT NULL;
-
-
-
-
+-- INTERVIEW SCHEDULE TABLE
 CREATE TABLE interview_schedule (
     id INT AUTO_INCREMENT PRIMARY KEY,
     candidate_id INT,
@@ -132,11 +154,13 @@ CREATE TABLE interview_schedule (
     FOREIGN KEY (candidate_id) REFERENCES candidates(id)
 );
 
-
 select * from interview_schedule;
+truncate table interview_schedule;
 drop table interview_schedule;
 
+ALTER TABLE interview_schedule ADD COLUMN teams_event_id VARCHAR(255);
 
+-- RATINGS TABLE
 CREATE TABLE ratings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     candidate_id INT,
@@ -150,7 +174,6 @@ CREATE TABLE ratings (
     remarks TEXT,
     status ENUM('pending', 'submitted') DEFAULT 'pending',
     submitted_on DATETIME DEFAULT CURRENT_TIMESTAMP,
-
     FOREIGN KEY (candidate_id) REFERENCES candidates(id),
     FOREIGN KEY (requisition_id) REFERENCES requisitions(id),
     FOREIGN KEY (interviewer_id) REFERENCES interview_hierarchy(id),
@@ -158,7 +181,10 @@ CREATE TABLE ratings (
 );
 
 select * from ratings;
+truncate table ratings;
+drop table ratings;
 
+-- JOB PROFILE TABLE
 CREATE TABLE job_profile ( 
     profile_id INT AUTO_INCREMENT PRIMARY KEY,
     date DATE,
@@ -172,15 +198,7 @@ CREATE TABLE job_profile (
     exp_ctc VARCHAR(150) NOT NULL,
     source VARCHAR(150) NOT NULL,
     cv LONGBLOB
-);  
+);
 
 select * from job_profile;
-
-ALTER TABLE job_profile
-ADD COLUMN dynamic_exp INT GENERATED ALWAYS AS (TIMESTAMPDIFF(YEAR, date, CURDATE()) + total_exp) STORED;
-
-
-
-
-
-
+truncate table job_profile;

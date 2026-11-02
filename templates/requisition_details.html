@@ -1,51 +1,314 @@
 {% extends "home.html" %}
+
+{% block head %}
+  <!-- Tom Select for modern dropdowns -->
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+{% endblock %}
+
 {% block content %}
 
-<div class="mt-4">
+<style>
+  .detail-card {
+    background: #ffffff;
+    border: 1px solid var(--border-color, #e3e8ef);
+    border-radius: 14px;
+    margin-bottom: 24px;
+    /* Removed overflow: hidden to allow dropdowns to pop out */
+    box-shadow: 0 2px 10px rgba(10, 25, 48, 0.03);
+  }
 
-    {% if requisition.assigned_to %}
-        <div class="alert alert-info">
-            <strong>Assigned to:</strong> {{ requisition.assigned_to_name }} ({{ requisition.assigned_to }})
-        </div>
-    {% else %}
-        <!-- HR Assignment Form -->
-        <form method="POST">
-            <div class="form-group">
-                <label for="assigned_to">Select HR:</label>
-                <select class="form-control" name="assigned_to" required>
-                    <option value="" disabled selected>Select HR</option>
-                    {% for hr in hr_users %}
-                        <option value="{{ hr.email }}">{{ hr.name }} ({{ hr.email }})</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="btn btn-success mt-2">Assign</button>
-        </form>
+  .detail-card-header {
+    background: #f8fafc;
+    padding: 16px 24px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--ink-900, #0a1930);
+    border-bottom: 1px solid var(--border-color, #e3e8ef);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    /* Apply rounded corners to header to replace overflow: hidden */
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+  }
+
+  .detail-card-body {
+    padding: 24px;
+    /* Ensure bottom corners stay rounded if there's no table inside */
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
+  }
+
+  .label-title {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted, #667085);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .label-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--ink-900, #0a1930);
+  }
+
+  .btn-action-primary {
+    background: linear-gradient(135deg, var(--ink-800, #0f2547), var(--ink-900, #0a1930));
+    color: #ffffff;
+    border: 1px solid var(--brass-500, #c6a15b);
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .btn-action-primary:hover {
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(10, 25, 48, 0.2);
+  }
+
+  /* Custom overrides for Tom Select */
+  .ts-control {
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    border-color: var(--border-color, #e3e8ef) !important;
+    box-shadow: none !important;
+  }
+  .ts-control.focus {
+    border-color: var(--brass-500, #c6a15b) !important;
+    box-shadow: 0 0 0 3px rgba(198, 161, 91, 0.15) !important;
+  }
+
+  /* Force Tom Select dropdown to always be on top */
+  .ts-dropdown {
+    z-index: 1055 !important;
+  }
+</style>
+
+<div class="container-fluid px-0">
+
+    <!-- Assignment Alert -->
+    {% if assigned_users %}
+    <div class="alert alert-primary border-0 shadow-sm mb-4" style="border-radius: 12px;">
+        <strong>Assigned to:</strong>
+        <ul class="mb-0 ps-3 mt-1">
+            {% for user in assigned_users %}
+                <li>
+                    <span class="badge bg-primary me-1">{{ user.name }} ({{ user.email }})</span>
+                    {% if user.assigned_by_email %}
+                        <span class="text-muted">
+                            — assigned by <strong>{{ user.assigned_by_email }}</strong>
+                            on <em>{{ user.assigned_at.strftime('%Y-%m-%d %H:%M:%S') if user.assigned_at else '' }}</em>
+                        </span>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
     {% endif %}
-</div>
 
-<!-- Comments Form - Always visible -->
-<div class="mt-4">
-    <h4>Comments</h4>
-    <form method="POST" action="{{ url_for('update_comments', requisition_id=requisition.id) }}">
-        <div class="form-group">
-            <textarea class="form-control" name="comments" rows="4" placeholder="Add comments...">{{ requisition.comments or '' }}</textarea>
+    <!-- Assign HR Section -->
+    {% if user.role in ['admin', 'hr lead'] %}
+    <div class="detail-card">
+        <div class="detail-card-header">Assign HR(s)</div>
+        <div class="detail-card-body">
+            <form method="POST">
+                <div class="form-group mb-3">
+                    <label class="label-title" for="assigned_to">Select HR(s):</label>
+                    <!-- Added class for Tom Select -->
+                    <select class="form-select searchable-multi" name="assigned_to" id="assigned_to" multiple required>
+                        {% for hr in hr_users %}
+                            <option value="{{ hr.email }}"
+                                {% if hr.email in assigned_user_emails %}selected{% endif %}>
+                                {{ hr.name }} ({{ hr.email }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-success btn-sm px-4 py-2" style="border-radius: 8px; font-weight: 600;">Save Assignment</button>
+            </form>
         </div>
-        <button type="submit" class="btn btn-info mt-2">Update Comments</button>
-    </form>
+    </div>
+    {% endif %}
+
+    {% if requisition %}
+    <!-- Requisition Grid Details -->
+    <div class="detail-card">
+        <div class="detail-card-header">Requisition Summary</div>
+        <div class="detail-card-body">
+            <div class="row g-4 mb-3">
+                <div class="col-md-4"><div class="label-title">Job Title</div><div class="label-value">{{ requisition.job_title }}</div></div>
+                <div class="col-md-4"><div class="label-title">Department</div><div class="label-value">{{ requisition.department }}</div></div>
+                <div class="col-md-4"><div class="label-title">Hiring Type</div><div class="label-value">{{ requisition.hiring_type }}</div></div>
+                <div class="col-md-4"><div class="label-title">Location</div><div class="label-value">{{ requisition.location }}</div></div>
+                <div class="col-md-4"><div class="label-title">Skills Required</div><div class="label-value">{{ requisition.skills_required }}</div></div>
+                <div class="col-md-4"><div class="label-title">Budget</div><div class="label-value">₹{{ requisition.budget }}</div></div>
+                <div class="col-md-4"><div class="label-title">Openings</div><div class="label-value">{{ requisition.openings_filled }} / {{ requisition.number_of_openings }} Filled</div></div>
+                <div class="col-md-4"><div class="label-title">Status</div><div class="label-value"><span class="badge bg-secondary">{{ requisition.status }}</span></div></div>
+                <div class="col-md-4"><div class="label-title">Created By</div><div class="label-value">{{ requisition.created_by_name }}</div></div>
+                <div class="col-md-4"><div class="label-title">Customer Name</div><div class="label-value">{{ requisition.customer_name }}</div></div>
+                <div class="col-md-4"><div class="label-title">PO Value</div><div class="label-value">{{ requisition.po_value }}</div></div>
+
+                <!-- 👇 NEW FIELDS ADDED HERE 👇 -->
+                <div class="col-md-4"><div class="label-title">Experience Required</div><div class="label-value">{{ requisition.experience_required or 'N/A' }}</div></div>
+                <div class="col-md-4"><div class="label-title">Work Type</div><div class="label-value">{{ requisition.work_location_type or 'N/A' }}</div></div>
+                <!-- 👆 NEW FIELDS ADDED HERE 👆 -->
+            </div>
+
+            <div class="mt-4">
+                <div class="label-title">Job Description</div>
+                <div class="p-3 bg-light rounded mt-1 text-secondary" style="white-space: pre-line; border: 1px solid var(--border-color, #e3e8ef);">
+                    {{ requisition.job_description }}
+                </div>
+            </div>
+
+            <!-- 👇 NEW SCREENING QUESTIONS ADDED HERE 👇 -->
+            {% if requisition.screening_questions %}
+            <div class="mt-4">
+                <div class="label-title">Screening Questions</div>
+                <div class="p-3 bg-light rounded mt-1 text-secondary" style="border: 1px solid var(--border-color, #e3e8ef);">
+                    <ul class="mb-0 ps-3">
+                    {% for q in requisition.screening_questions.split('|') %}
+                        <li>{{ q.strip() }}</li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+            <!-- 👆 NEW SCREENING QUESTIONS ADDED HERE 👆 -->
+
+        </div>
+    </div>
+
+    <!-- LEVEL 2 ASSESSMENT SECTION -->
+    <div class="detail-card" style="border-left: 4px solid #2f6fed;">
+        <div class="detail-card-header" style="background: #f0f7ff; border-bottom: 1px solid #bfdbfe; border-top-left-radius: 14px; border-top-right-radius: 14px;">
+            <span style="color: #1e3a8a; font-weight: 700;">Level 2 Assessment</span>
+        </div>
+        <div class="detail-card-body">
+            {% if has_assessment %}
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-4">
+                    <div style="flex: 1;">
+                        <h5 class="mb-3" style="font-weight: 700; color: #1e3a8a;">{{ req_assessment.title }}</h5>
+
+                        <div class="row g-4">
+                            <div class="col-sm-6 col-md-3">
+                                <div class="label-title">Total Questions</div>
+                                <div class="label-value">{{ req_assessment.total_questions }} Qs</div>
+                            </div>
+                            <div class="col-sm-6 col-md-3">
+                                <div class="label-title">Duration</div>
+                                <div class="label-value">{{ req_assessment.duration_minutes }} Minutes</div>
+                            </div>
+                            <div class="col-sm-6 col-md-3">
+                                <div class="label-title">Pass Rating</div>
+                                <div class="label-value">{{ req_assessment.pass_rating }}</div>
+                            </div>
+                            <div class="col-sm-6 col-md-3">
+                                <div class="label-title">Status</div>
+                                <div class="label-value">
+                                    <span class="badge bg-success" style="font-size: 0.8rem; padding: 6px 10px;">Active</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <a href="{{ url_for('requisition_assessment', requisition_id=requisition.id) }}" class="btn btn-primary d-flex align-items-center gap-2" style="border-radius: 8px; padding: 10px 20px; font-weight: 600; white-space: nowrap;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            Manage Questions
+                        </a>
+                    </div>
+                </div>
+            {% else %}
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <p class="mb-1 text-secondary" style="font-size: 0.95rem;">
+                            This requisition does not have a Level 2 Assessment configured.
+                        </p>
+                        <span class="badge bg-warning text-dark" style="font-size: 0.8rem; padding: 6px 10px;">No Assessment Assigned</span>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Utilization & Interview Tables -->
+    {% if utilization_data %}
+    <div class="detail-card">
+        <div class="detail-card-header">Department Utilization</div>
+        <div class="detail-card-body p-0" style="border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; overflow: hidden;">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>Department</th><th>Utilization (%)</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in utilization_data %}
+                    <tr><td>{{ row.department_name }}</td><td>{{ row.utilization }}%</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if interview_hierarchy %}
+    <div class="detail-card">
+        <div class="detail-card-header">Interview Hierarchy</div>
+        <div class="detail-card-body p-0" style="border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; overflow: hidden;">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>Level</th><th>Interviewer Name</th><th>Email</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in interview_hierarchy %}
+                    <tr><td>{{ row.level }}</td><td>{{ row.interviewer_name }}</td><td>{{ row.interviewer_email }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Comments Section -->
+    <div class="detail-card">
+        <div class="detail-card-header">Comments</div>
+        <div class="detail-card-body">
+            <form method="POST" action="{{ url_for('update_comments', requisition_id=requisition.id) }}">
+                <div class="mb-3">
+                    <textarea class="form-control" name="comments" rows="3" placeholder="Add comments..." style="border-radius: 8px;">{{ requisition.comments or '' }}</textarea>
+                </div>
+                <button type="submit" class="btn btn-outline-primary btn-sm px-3" style="border-radius: 6px;">Update Comments</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 mb-5">
+        <a href="{{ url_for('view_requisitions') }}" class="btn btn-light px-4" style="border-radius: 8px;">Back</a>
+        <a href="{{ url_for('edit_requisition', requisition_id=requisition.id) }}" class="btn-action-primary">Edit Requisition</a>
+    </div>
+    {% endif %}
+
 </div>
 
-<div class="container mt-4">
-    <h3>Requisition Details</h3>
-    <table class="table table-bordered">
-        {% for key, value in requisition.items() %}
-        <tr>
-            <th>{{ key.replace('_', ' ').capitalize() }}</th>
-            <td>{{ value }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    <a href="{{ url_for('view_requisitions') }}" class="btn btn-secondary">Back</a>
-    <a href="{{ url_for('edit_requisition', requisition_id=requisition.id) }}" class="btn btn-primary">Edit</a>
-</div>
+<script>
+    // Initialize Tom Select for the HR assignment dropdown
+    document.addEventListener("DOMContentLoaded", function() {
+        const multiSelect = document.querySelector('.searchable-multi');
+        if (multiSelect) {
+            new TomSelect(multiSelect, {
+                plugins: ['remove_button'],
+                create: false,
+                sortField: { field: "text", direction: "asc" },
+                placeholder: "Search and select HRs...",
+                maxItems: null,
+                dropdownParent: 'body' // <-- THIS FIXES THE DROPDOWN HIDING ISSUE
+            });
+        }
+    });
+</script>
 {% endblock %}

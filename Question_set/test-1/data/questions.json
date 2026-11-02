@@ -1,0 +1,20 @@
+{
+  "exams": [
+    {
+      "id": "exam-1793342075",
+      "title": "Test-1",
+      "durationMinutes": 60,
+      "secondsPerQuestion": 120,
+      "passPercent": 70,
+      "questions": []
+    },
+    {
+      "id": "exam-1793342114",
+      "title": "t-2",
+      "durationMinutes": 60,
+      "secondsPerQuestion": 120,
+      "passPercent": 70,
+      "questions": []
+    }
+  ]
+}

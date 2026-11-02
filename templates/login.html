@@ -2,9 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Login | Manpower App</title>
+    <title>Login | Manpower Requisition</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <style>
+        :root {
+            --primary: #0078d4;
+            --primary-hover: #106ebe;
+            --primary-light: #eff6ff;
+            --accent-blue: #00a4ef;
+            --bg-surface: #f4f8fa;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+        }
+
         * {
             box-sizing: border-box;
             margin: 0;
@@ -12,136 +27,544 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f4f6f8;
-        }
-        .top-bar {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-surface);
+            color: var(--text-main);
+            min-height: 100vh;
             display: flex;
             align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+        }
+
+        .split-wrapper {
+            display: flex;
+            width: 100vw;
+            min-height: 100vh;
+        }
+
+        /* Desktop Hero Section (Left Column) */
+        .hero-section {
+            flex: 1.2;
+            background: linear-gradient(135deg, #0078d4 0%, #106ebe 50%, #00a4ef 100%);
+            color: #ffffff;
+            padding: 50px 60px;
+            display: flex;
+            flex-direction: column;
             justify-content: space-between;
-            background-color: #0078D4;
-            color: white;
-            padding: 8px 16px;
-            height: 60px;
+            align-items: flex-start;
+            position: relative;
+            overflow: hidden;
         }
 
-        .top-bar .logo img {
-            height: 50px; /* Increased from 40px */
-        }
-
-        .top-bar h1 {
-            font-size: 24px; /* Reduced font size to fit better */
-            flex-grow: 1;
-            text-align: center;
-            margin: 0;
+        /* Ambient background glow */
+        .hero-section::before {
+            content: '';
             position: absolute;
-            left: 0;
-            right: 0;
-            margin-left: auto;
-            margin-right: auto;
-            width: fit-content;
-        }
-        .login-container {
-            max-width: 400px;
-            margin: 50px auto;
-            padding: 30px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            top: -10%;
+            right: -10%;
+            width: 480px;
+            height: 480px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
         }
 
-        .login-container h2 {
-            text-align: center;
+        /* Top Left Anchored Logo Container */
+        .hero-header {
+            width: 100%;
             margin-bottom: 20px;
-            color: #333;
         }
 
-        .login-container input {
+        .hero-header .company-logo {
+            height: 85px;
+            width: auto;
+            max-width: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        /* Left Column Text Content */
+        .hero-content {
+            max-width: 520px;
+            margin-top: 40px;
+            margin-bottom: auto;
+            z-index: 1;
+        }
+
+        .hero-title {
+            font-size: 2.6rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+            color: #ffffff;
+        }
+
+        .hero-subtitle {
+            font-size: 1.05rem;
+            line-height: 1.6;
+            color: #e0f2fe;
+            margin-bottom: 32px;
+        }
+
+        .feature-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.95rem;
+            color: #f0f9ff;
+            font-weight: 500;
+        }
+
+        .feature-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #ffffff;
+            flex-shrink: 0;
+            font-weight: bold;
+        }
+
+        .hero-footer {
+            font-size: 0.85rem;
+            color: #bae6fd;
+            z-index: 1;
+        }
+
+        /* Form Section (Right Column) */
+        .form-section {
+            flex: 1;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+
+        .login-card {
             width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-size: 14px;
+            max-width: 420px;
         }
 
-        .login-container button {
-            width: 100%;
-            padding: 12px;
-            background-color: #0078D4;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: background 0.3s ease;
+        /* Mobile Header Banner */
+        .mobile-header {
+            display: none;
+            width: 100vw;
+            background: linear-gradient(135deg, #0078d4 0%, #106ebe 100%);
+            padding: 28px 20px;
+            text-align: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            box-shadow: 0 4px 12px rgba(0, 120, 212, 0.15);
         }
 
-        .login-container button:hover {
-            background-color: #005A9E;
+        .mobile-header img {
+            height: 60px;
+            width: auto;
+            max-width: 85%;
+            object-fit: contain;
         }
 
-        .sso-btn {
-            background-color: #2b6cb0;
-            margin-top: 10px;
+        .card-header {
+            margin-bottom: 24px;
         }
 
-        ul {
-            margin: 10px 0;
-            padding: 0;
+        .card-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #0f172a;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+        }
+
+        .card-subtitle {
+            font-size: 0.925rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* Flash Messages */
+        .alert-container {
+            margin-bottom: 20px;
             list-style: none;
         }
 
-        ul li {
-            color: red;
-            font-size: 14px;
+        .alert-item {
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        @media (max-width: 500px) {
-            .top-bar h1 {
-                font-size: 16px;
-                margin-right: 20px;
+        /* --- SEGMENTED TAB SWITCHER --- */
+        .tab-switcher {
+            display: flex;
+            background-color: #f1f5f9;
+            padding: 4px;
+            border-radius: 10px;
+            margin-bottom: 24px;
+            gap: 4px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 8px 10px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 0.825rem;
+            font-weight: 600;
+            border-radius: 7px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        .tab-btn.active {
+            background-color: #ffffff;
+            color: var(--text-main);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+        }
+
+        /* TAB PANELS */
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* SSO Button */
+        .btn-sso {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            background-color: #0078d4;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            padding: 14px 20px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 4px rgba(0, 120, 212, 0.2);
+        }
+
+        .btn-sso:hover {
+            background-color: var(--primary-hover);
+            box-shadow: 0 4px 12px rgba(0, 120, 212, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .sso-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        /* Form Inputs for IceWarp & Direct Login */
+        .form-group {
+            margin-bottom: 16px;
+            text-align: left;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 6px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.925rem;
+            font-family: inherit;
+            color: var(--text-main);
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .form-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.15);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 13px;
+            background-color: var(--primary);
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            margin-top: 8px;
+        }
+
+        .btn-submit:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 28px 0;
+            color: #94a3b8;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .divider span {
+            padding: 0 12px;
+        }
+
+        .support-info {
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .support-info a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .support-info a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive Breakpoints */
+        @media (max-width: 960px) {
+            body {
+                background-color: #ffffff;
             }
 
-            .login-container {
-                margin: 30px 20px;
-                padding: 20px;
+            .split-wrapper {
+                flex-direction: column;
+                position: relative;
+            }
+
+            .hero-section {
+                display: none;
+            }
+
+            .mobile-header {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .form-section {
+                padding: 140px 24px 40px 24px;
+                justify-content: flex-start;
+                min-height: 100vh;
+                width: 100%;
+            }
+
+            .login-card {
+                max-width: 100%;
             }
         }
     </style>
 </head>
 <body>
 
-    <div class="top-bar">
-        <div class="logo">
-            <img src="{{ url_for('static', filename='Company Logo1.png') }}" alt="Company Logo">
-        </div>
-        <h1>Manpower Requisition</h1>
-    </div>
+    <div class="split-wrapper">
 
-    <div class="login-container">
-        <h2>Login</h2>
+        <!-- Left Banner / Information Side (Desktop) -->
+        <section class="hero-section">
+            <div class="hero-header">
+                <img src="{{ url_for('static', filename='Company Logo1.png') }}" alt="Orient Technologies Logo" class="company-logo">
+            </div>
 
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                <ul>
-                    {% for message in messages %}
-                        <li>{{ message }}</li>
-                    {% endfor %}
+            <div class="hero-content">
+                <h1 class="hero-title">Manpower Requisition</h1>
+                <p class="hero-subtitle">Streamline workforce requests, simplify department approvals, and track talent requisitions in real time.</p>
+
+                <ul class="feature-list">
+                    <li class="feature-item">
+                        <span class="feature-icon">✓</span>
+                        Single Sign-On via Azure Active Directory
+                    </li>
+                    <li class="feature-item">
+                        <span class="feature-icon">✓</span>
+                        Real-time requisition tracking & analytics
+                    </li>
+                    <li class="feature-item">
+                        <span class="feature-icon">✓</span>
+                        Secure role-based enterprise access
+                    </li>
                 </ul>
-            {% endif %}
-        {% endwith %}
+            </div>
 
-        <form method="POST" action="{{ url_for('login') }}">
-            <input type="email" name="email" placeholder="Email" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <button type="submit">Login</button>
-        </form>
+            <div class="hero-footer">
+                &copy; {{ current_year if current_year else '2026' }} Orient Technologies. All rights reserved.
+            </div>
+        </section>
 
-        <form method="GET" action="{{ url_for('sso_login') }}">
-            <button class="sso-btn">Login with Azure SSO</button>
-        </form>
+        <!-- Right Form / Login Side -->
+        <main class="form-section">
+
+            <!-- Full Width Mobile Top Banner -->
+            <div class="mobile-header">
+                <img src="{{ url_for('static', filename='Company Logo1.png') }}" alt="Orient Technologies Logo">
+            </div>
+
+            <div class="login-card">
+
+                <div class="card-header">
+                    <h2 class="card-title">Sign in</h2>
+                    <p class="card-subtitle">Choose your preferred login method to access your account.</p>
+                </div>
+
+                <!-- Flashed Error Messages -->
+                {% with messages = get_flashed_messages() %}
+                    {% if messages %}
+                        <ul class="alert-container">
+                            {% for message in messages %}
+                                <li class="alert-item">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    <span>{{ message }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                {% endwith %}
+
+                <!-- 3-Segment Tab Bar -->
+                <div class="tab-switcher">
+                    <button class="tab-btn active" onclick="switchTab('sso')">Microsoft SSO</button>
+                    <button class="tab-btn" onclick="switchTab('icewarp')">Ice-Warp</button>
+           <!--     <button class="tab-btn" onclick="switchTab('direct')">Email & Password</button>-->
+                </div>
+
+                <!-- TAB 1: Microsoft SSO -->
+                <div id="tab-sso" class="tab-panel active">
+                    <form method="GET" action="{{ url_for('sso_login') }}">
+                        <button type="submit" class="btn-sso">
+                            <svg class="sso-icon" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M10 0H0V10H10V0Z" fill="#F25022"/>
+                                <path d="M21 0H11V10H21V0Z" fill="#7FBA00"/>
+                                <path d="M10 11H0V21H10V11Z" fill="#00A4EF"/>
+                                <path d="M21 11H11V21H21V11Z" fill="#FFB900"/>
+                            </svg>
+                            Sign in with Microsoft
+                        </button>
+                    </form>
+                </div>
+
+                <!-- TAB 2: IceWarp Login -->
+                <div id="tab-icewarp" class="tab-panel">
+                    <form method="POST" action="{{ url_for('icewarp_login') }}">
+                        <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
+
+                        <div class="form-group">
+                            <label class="form-label" for="icewarp-user">IceWarp Email</label>
+                            <input type="email" id="icewarp-user" name="username" class="form-input" placeholder="user@domain.com" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="icewarp-pass">Password</label>
+                            <input type="password" id="icewarp-pass" name="password" class="form-input" placeholder="••••••••" required>
+                        </div>
+
+                        <button type="submit" class="btn-submit">Sign in with IceWarp</button>
+                    </form>
+                </div>
+
+                <!-- TAB 3: Direct Email & Password Login -->
+<!--                <div id="tab-direct" class="tab-panel">-->
+<!--                    <form method="POST" action="{{ url_for('login') }}">-->
+<!--                        <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">-->
+<!--                        <input type="hidden" name="auth_type" value="direct">-->
+
+<!--                        <div class="form-group">-->
+<!--                            <label class="form-label" for="direct-email">Email Address</label>-->
+<!--                            <input type="email" id="direct-email" name="email" class="form-input" placeholder="name@company.com" required autocomplete="username">-->
+<!--                        </div>-->
+
+<!--                        <div class="form-group">-->
+<!--                            <label class="form-label" for="direct-pass">Password</label>-->
+<!--                            <input type="password" id="direct-pass" name="password" class="form-input" placeholder="••••••••" required autocomplete="current-password">-->
+<!--                        </div>-->
+
+<!--                        <button type="submit" class="btn-submit">Sign In</button>-->
+<!--                    </form>-->
+<!--                </div>-->
+                <div class="divider">
+                    <span>Protected Portal</span>
+                </div>
+
+                <div class="support-info">
+                    Having trouble signing in? <br>
+                    <a href="https://sparks.orientindia.net/support_form">Contact IT Helpdesk</a> for support.
+                </div>
+
+            </div>
+        </main>
+
     </div>
 
+    <!-- Tab Switching Logic -->
+    <script>
+        function switchTab(tabName) {
+            // Remove active class from all tabs & panels
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+
+            // Activate chosen tab & panel
+            if (tabName === 'sso') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('tab-sso').classList.add('active');
+            } else if (tabName === 'icewarp') {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('tab-icewarp').classList.add('active');
+            } else if (tabName === 'direct') {
+                document.querySelectorAll('.tab-btn')[2].classList.add('active');
+                document.getElementById('tab-direct').classList.add('active');
+            }
+        }
+    </script>
 </body>
 </html>

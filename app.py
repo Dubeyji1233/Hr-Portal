@@ -1,5 +1,4 @@
-
-from flask import send_file,Flask, flash,render_template, request, redirect, url_for, session, flash,jsonify, Response, abort 
+from flask import send_file,Flask, flash,render_template, request, redirect, url_for, session, flash,jsonify, Response, abort
 import pymysql
 import msal
 from datetime import datetime,timedelta
@@ -13,9 +12,17 @@ import pytz
 from pytz import timezone
 import logging
 from logging.handlers import RotatingFileHandler
+from db_handler import DBLogHandler
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
-
+import ssl
+import imaplib
+from urllib.parse import urlparse
+import pandas as pd
+import os
+import json
+import shutil
+from werkzeug.utils import secure_filename
 
 load_dotenv()
 
@@ -30,7 +37,24 @@ CLIENT_ID = os.getenv("AZURE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 REDIRECT_PATH = "/getAToken"
-SCOPE = ["User.Read", "Mail.Send","Calendars.ReadWrite"," OnlineMeetings.ReadWrite"]
+SCOPE = ["User.Read", "Mail.Send","Calendars.ReadWrite","OnlineMeetings.ReadWrite"]
+SHAREPOINT_SITE_ID = os.getenv("SHAREPOINT_SITE_ID")
+EMPLOYEE_MASTER_LIST_ID = os.getenv("EMPLOYEE_MASTER_LIST_ID")
+IMAP_SERVER = os.getenv("IMAP_SERVER")
+IMAP_PORT = os.getenv("IMAP_PORT")
+
+
+def get_otpluat_token():
+    url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
+    data = {
+        "grant_type": "client_credentials",
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "scope": "https://graph.microsoft.com/.default"
+    }
+    response = requests.post(url, data=data)
+    response.raise_for_status()
+    return response.json()["access_token"]
 
 # DB Connection
 def get_db_connection():
@@ -53,6 +77,8 @@ def build_msal_app():
         CLIENT_ID, authority=AUTHORITY,
         client_credential=CLIENT_SECRET)
 
+
+
 def build_auth_url():
     msal_app = build_msal_app()
     return msal_app.get_authorization_request_url(
@@ -60,19 +86,32 @@ def build_auth_url():
         redirect_uri=url_for('auth_response', _external=True).replace("127.0.0.1", "localhost")
     )
 
-os.makedirs("logs", exist_ok=True)
-
 # For logging all the steps
 logger = logging.getLogger("AppLogger")
 logger.setLevel(logging.INFO)
 
 if not logger.handlers:
-    handler = RotatingFileHandler("logs/app.log", maxBytes=1_000_000, backupCount=5)
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    # File handler
+    file_handler = RotatingFileHandler("logs/app.log", maxBytes=1_000_000, backupCount=5)
+    file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
 
-# Background Schedular 
+    # DB handler
+    db_config = {
+        'host': 'localhost',
+        'user': 'root',
+        'password': os.getenv('db_password'),
+        'database': 'hr_portal',
+        'cursorclass': pymysql.cursors.DictCursor
+    }
+
+    db_handler = DBLogHandler(db_config)
+    db_formatter = logging.Formatter("%(message)s")
+    db_handler.setFormatter(db_formatter)
+    logger.addHandler(db_handler)
+
+# Background Schedular
 scheduler = BackgroundScheduler()
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
@@ -166,7 +205,7 @@ def auth_response():
                 else:
                     # New user — assign default role "HR"
                     logger.info(f"New SSO user, adding to database: {email}")
-                    default_role = "admin"
+                    default_role = "requestor"
                     cursor.execute(
                         "INSERT INTO users (email, name, azure_oid, role) VALUES (%s, %s, %s, %s)",
                         (email, name, oid, default_role)
@@ -185,9 +224,243 @@ def auth_response():
             session["access_token"] = result["access_token"]
             logger.info(f"Session created for: {email}")
             return redirect(url_for('home'))
-        
+
     logger.error("SSO Login failed: Token acquisition unsuccessful.")
     return "SSO Login failed", 401
+
+
+# ------------------------------------------------------------------------------------#
+
+#----------------------------- Ice warp login -------------------------#
+
+def validate_icewarp_credentials(
+    username,
+    password,
+    server=IMAP_SERVER,
+    port=IMAP_PORT
+):
+    """Validate credentials against IceWarp IMAP server."""
+
+    try:
+
+        logger.info(
+            f"Trying IceWarp IMAP: "
+            f"server={server}, port={port}, user={username}"
+        )
+
+        context = ssl.create_default_context()
+
+        # IceWarp server has self-signed certificate
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+
+        with imaplib.IMAP4_SSL(
+            server,
+            int(port),
+            ssl_context=context,
+            timeout=15
+        ) as imap:
+
+            imap.login(username, password)
+
+            logger.info(
+                f"IceWarp authentication successful for {username}"
+            )
+
+            return True
+
+    except imaplib.IMAP4.error as e:
+
+        logger.warning(
+            f"IceWarp authentication failed for {username}: {e}"
+        )
+
+        return False
+
+    except Exception as e:
+
+        logger.exception(
+            f"IceWarp connection error for {username}: {e}"
+        )
+
+        return False
+
+def is_safe_url(target):
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(target)
+    return test_url.netloc == "" or test_url.netloc == ref_url.netloc
+
+def get_employee_from_master(access_token, site_id, list_id, email):
+    url = (
+        f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/items"
+        f"?$expand=fields&$filter=fields/Email eq '{email}'"
+    )
+
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+    resp = requests.get(url, headers=headers)
+
+
+    if resp.status_code != 200:
+        return None
+
+    items = resp.json().get("value", [])
+
+
+    return items[0]["fields"] if items else None
+
+
+@app.route("/icewarp_login", methods=["GET", "POST"])
+def icewarp_login():
+    """IceWarp login route"""
+
+    if request.method == "GET":
+        next_url = request.args.get("next", url_for("home"))
+        return render_template("icewarp_login.html", next_url=next_url)
+
+    # ---------------------------------------------------------
+    # 1. Get login details
+    # ---------------------------------------------------------
+    email = request.form.get("username", "").strip().lower()
+    password = request.form.get("password", "").strip()
+    next_url = request.form.get("next", url_for("home"))
+
+    logger.info(f"IceWarp login attempt for {email}")
+
+    if not email or not password:
+        flash("Please enter both email and password.", "error")
+        return redirect(url_for("icewarp_login", next=next_url))
+
+    # ---------------------------------------------------------
+    # 2. Validate IceWarp credentials
+    # ---------------------------------------------------------
+    if not validate_icewarp_credentials(email, password):
+        logger.warning(f"IceWarp authentication failed for {email}")
+        flash("Invalid IceWarp username or password.", "error")
+        return redirect(url_for("icewarp_login", next=next_url))
+
+    logger.info(f"IceWarp authentication successful for {email}")
+
+    # ---------------------------------------------------------
+    # 3. Get Microsoft Graph token (for SharePoint check)
+    # ---------------------------------------------------------
+    try:
+        access_token = get_otpluat_token()
+        logger.info(f"Microsoft Graph token obtained for {email}")
+    except Exception as e:
+        logger.exception(f"Failed to get Microsoft Graph token for {email}: {e}")
+        flash("Unable to connect to employee master. Please try again later.", "error")
+        return redirect(url_for("icewarp_login", next=next_url))
+
+    # ---------------------------------------------------------
+    # 4. Check Employee Master (ONLY FOR AUTHORIZATION)
+    # ---------------------------------------------------------
+    site_id = SHAREPOINT_SITE_ID
+    list_id = EMPLOYEE_MASTER_LIST_ID
+
+    employee = get_employee_from_master(access_token, site_id, list_id, email)
+
+    if not employee:
+        logger.warning(f"Employee Master record not found for {email}")
+        flash("Access denied. You are not authorized to use this application.", "error")
+        return redirect(url_for("icewarp_login", next=next_url))
+
+    logger.info(f"Employee Master record found for {email}")
+
+    # ---------------------------------------------------------
+    # 5. SIMPLE: Check if email exists in database
+    # ---------------------------------------------------------
+    conn = get_db_connection()
+
+    if not conn:
+        logger.error(f"Database connection failed for {email}")
+        flash("Database connection error.", "error")
+        return redirect(url_for("icewarp_login", next=next_url))
+
+    user_data = None
+
+    try:
+        with conn.cursor() as cursor:
+            # Check if user exists by email
+            cursor.execute(
+                """
+                SELECT email, name, role
+                FROM users
+                WHERE LOWER(email) = LOWER(%s)
+                """,
+                (email,)
+            )
+            user_row = cursor.fetchone()
+
+            # -------------------------------------------------
+            # USER EXISTS - USE DATABASE ROLE
+            # -------------------------------------------------
+            if user_row:
+                user_data = {
+                    "email": user_row["email"].lower(),
+                    "name": user_row["name"],
+                    "role": user_row["role"] or "requestor"  # Use DB role, default to requestor if empty
+                }
+                logger.info(f"✅ User exists: {email}, Role: {user_data['role']}")
+
+            # -------------------------------------------------
+            # NEW USER - INSERT WITH REQUESTOR ROLE
+            # -------------------------------------------------
+            else:
+                logger.info(f"New user: {email}")
+
+                # Get name from SharePoint or create from email
+                employee_name = employee.get("Name") or email.split("@")[0].replace(".", " ").title()
+
+                # INSERT with requestor role (hardcoded as per your requirement)
+                cursor.execute(
+                    """
+                    INSERT INTO users (email, name, role)
+                    VALUES (%s, %s, %s)
+                    """,
+                    (email, employee_name, "requestor")
+                )
+                conn.commit()
+
+                user_data = {
+                    "email": email,
+                    "name": employee_name,
+                    "role": "requestor"
+                }
+                logger.info(f"✅ New user created: {email} with role: requestor")
+
+    except Exception as e:
+        logger.exception(f"Database error for {email}: {e}")
+        conn.rollback()
+        flash("Database error. Please contact administrator.", "error")
+        return redirect(url_for("icewarp_login", next=next_url))
+    finally:
+        conn.close()
+
+    # ---------------------------------------------------------
+    # 6. CREATE SESSION
+    # ---------------------------------------------------------
+    session.clear()
+
+    session["user"] = {
+        "email": user_data["email"],
+        "name": user_data["name"],
+        "role": user_data["role"]  # Comes from database
+    }
+
+    session["email"] = user_data["email"]
+    session["access_token"] = access_token
+
+    logger.info(f"✅ Session created: {user_data['email']}, Role: {user_data['role']}")
+
+    # ---------------------------------------------------------
+    # 7. Redirect
+    # ---------------------------------------------------------
+    if next_url and is_safe_url(next_url):
+        return redirect(next_url)
+
+    return redirect(url_for("home"))
+
 # ------------------------------------------------------------------------------------#
 @app.route('/home')
 def home():
@@ -195,135 +468,414 @@ def home():
         logger.warning("Unauthorized access to /home. Redirecting to login.")
         return redirect(url_for('login'))
 
-    page = request.args.get('page', 'dashboard')
     user_role = session['user']['role']
-    logger.info(f"User '{session['user']['email']}' with role '{user_role}' accessed /home with page: {page}")
+    default_page = 'dashboard' if user_role != 'interviewer' else None
+    page = request.args.get('page', default_page)
+
+    if user_role == 'interviewer' and page is None:
+        return redirect(url_for('interviewer_candidates'))
+    if user_role == 'interviewer' and page == 'dashboard':
+        return redirect(url_for('interviewer_candidates'))
 
     allowed_pages = {
         'manager': ['dashboard', 'requisition', 'repository', 'view_requisitions'],
-        'hr': ['dashboard', 'repository', 'view_requisitions'],
-        'hr lead': ['dashboard', 'repository', 'view_requisitions']
+        'hr': ['dashboard', 'repository', 'view_requisitions', 'requisition', 'question_sets', 'question_set_details',
+               'exam_details'],
+        'hr lead': ['dashboard', 'requisition', 'repository', 'view_requisitions'],
+        'interviewer': ['requisition', 'repository', 'view_requisitions'],
+        'requestor': ['dashboard', 'requisition', 'repository', 'view_requisitions']
     }
 
-    all_pages = ['dashboard', 'requisition', 'repository', 'usermanagement', 'view_requisitions']
+    all_pages = ['dashboard', 'requisition', 'repository', 'usermanagement', 'view_requisitions', 'question_sets',
+                 'question_set_details', 'exam_details', 'default_assessment', 'requisition_assessment']
     allowed = all_pages if user_role == 'admin' else allowed_pages.get(user_role, [])
 
     if page not in allowed:
-        logger.warning(f"User '{session['user']['email']}' attempted to access unauthorized page: {page}")
         page = 'notallowed'
 
-    return render_template(
-        'home.html',
-        user=session['user'],
-        page=page
+    context = {
+        "user": session['user'],
+        "page": page
+    }
+
+    # Load departments for requisition page
+    if page == "requisition":
+        departments, customers = get_departments_and_customers(
+            r"C:\PythonApplication\HR Portal\Department and Cost Centre List.xlsx"
+        )
+        context["departments"] = departments
+        context["customers"] = customers
+
+        # 🔥 Load Question Sets for Level 2 Assessment
+        folders_data = []
+        QUESTION_SETS_BASE_DIR = r"C:\Users\abhishekdubey\PycharmProjects\HR Portal\Question_set"
+
+        if os.path.exists(QUESTION_SETS_BASE_DIR):
+            for folder_name in os.listdir(QUESTION_SETS_BASE_DIR):
+                folder_path = os.path.join(QUESTION_SETS_BASE_DIR, folder_name)
+                if os.path.isdir(folder_path):
+                    json_path = os.path.join(folder_path, 'data', 'questions.json')
+                    exams_info = []
+                    if os.path.exists(json_path):
+                        try:
+                            with open(json_path, 'r', encoding='utf-8-sig') as f:
+                                data = json.load(f)
+                                for exam in data.get('exams', []):
+                                    exams_info.append({
+                                        'id': exam.get('id'),
+                                        'title': exam.get('title', 'Untitled Exam')
+                                    })
+                        except Exception as e:
+                            logging.error(f"Error loading {json_path}: {e}")
+                    if exams_info:
+                        folders_data.append({
+                            'folder_name': folder_name,
+                            'exams': exams_info
+                        })
+        context["question_folders"] = folders_data
+
+    # Load question sets list for the Question Sets management page
+    elif page == "question_sets":
+        folders_data = []
+        QUESTION_SETS_BASE_DIR = r"C:\Users\abhishekdubey\PycharmProjects\HR Portal\Question_set"
+
+        if os.path.exists(QUESTION_SETS_BASE_DIR):
+            for folder_name in os.listdir(QUESTION_SETS_BASE_DIR):
+                folder_path = os.path.join(QUESTION_SETS_BASE_DIR, folder_name)
+                if os.path.isdir(folder_path):
+                    json_path = os.path.join(folder_path, 'data', 'questions.json')
+                    exams_info = []
+                    total_questions = 0
+
+                    if os.path.exists(json_path):
+                        try:
+                            with open(json_path, 'r', encoding='utf-8-sig') as f:
+                                data = json.load(f)
+                                for exam in data.get('exams', []):
+                                    q_count = len(exam.get('questions', []))
+                                    total_questions += q_count
+                                    exams_info.append({
+                                        'id': exam.get('id'),
+                                        'title': exam.get('title', 'Untitled Exam'),
+                                        'count': q_count
+                                    })
+                        except Exception as e:
+                            pass
+
+                    folders_data.append({
+                        'folder_name': folder_name,
+                        'exams': exams_info,
+                        'total_questions': total_questions
+                    })
+
+        context["folders"] = sorted(folders_data, key=lambda x: x['folder_name'])
+
+    return render_template('home.html', **context)
+
+def sp_get_list_items(list_id, filter_query=None):
+    """Fetch all items from a SharePoint list using your existing get_otpluat_token()."""
+    # Use your existing token generator
+    access_token = get_otpluat_token()
+
+    if not access_token:
+        print("ERROR: Failed to retrieve access token")
+        return []
+
+    if not list_id:
+        print("ERROR: list_id not provided")
+        return []
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    graph_url = (
+        f"https://graph.microsoft.com/v1.0/sites/"
+        f"{SHAREPOINT_SITE_ID}/lists/{list_id}/items"
     )
+
+    if filter_query:
+        graph_url += f"?$expand=fields&$filter={filter_query}&$top=5000"
+    else:
+        graph_url += "?$expand=fields&$top=5000"
+
+    all_items = []
+
+    try:
+        while graph_url:
+            response = requests.get(graph_url, headers=headers)
+
+            if response.status_code != 200:
+                print(f"Error response: {response.status_code} - {response.text}")
+                break
+
+            data = response.json()
+
+            items = data.get("value", [])
+            for item in items:
+                field_data = item.get("fields", {})
+                field_data['id'] = item.get('id')
+                all_items.append(field_data)
+
+            graph_url = data.get("@odata.nextLink")
+
+        return all_items
+
+    except Exception as e:
+        print(f"Error fetching list items: {e}")
+        return []
+
+
+def get_departments_and_customers(file_path=r"C:\PythonApplication\HR Portal\Department and Cost Centre List.xlsx"):
+    departments = []
+    customers = []
+
+    # --- 1. Fetch Departments from SharePoint (Employee Master List) ---
+    try:
+        dept_items = sp_get_list_items(list_id=EMPLOYEE_MASTER_LIST_ID)
+        dept_set = set()
+
+        for item in dept_items:
+            # Retrieves Department field from SharePoint items
+            dept_val = item.get("Department")
+            if dept_val:
+                dept_set.add(str(dept_val).strip())
+
+        departments = sorted(list(dept_set))
+
+    except Exception as e:
+        print(f"Error fetching departments from SharePoint: {e}")
+
+    # --- 2. Fetch Customers from Local Excel (Sheet 2) ---
+    try:
+        df_cust = pd.read_excel(file_path, sheet_name=1)
+        df_cust.columns = df_cust.columns.str.strip()
+
+        if "customers" in df_cust.columns:
+            customers = df_cust["customers"].dropna().astype(str).unique().tolist()
+            customers = sorted(customers)
+        else:
+            print("Customer Name column not found in Sheet 2")
+
+    except Exception as e:
+        print(f"Error reading Excel file for customers: {e}")
+
+    return departments, customers
 
 @app.route('/dashboard_data')
 def dashboard_data():
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
 
-    # Step 1: Get all unique departments
-    cursor.execute("SELECT DISTINCT department FROM requisitions")
-    departments_result = cursor.fetchall()
-    departments = [row['department'] for row in departments_result]
-
-    openings = []
-    filled = []
-
-    # Step 2: For each department, get totals
-    for dept in departments:
+    try:
+        # 1. Department Breakdown (Active/Open Requisitions)
         cursor.execute("""
             SELECT 
+                department,
                 COALESCE(SUM(number_of_openings), 0) AS total_openings,
                 COALESCE(SUM(openings_filled), 0) AS total_filled
             FROM requisitions
-            WHERE department = %s
-        """, (dept,))
-        result = cursor.fetchone()
-        openings.append(result['total_openings'])
-        filled.append(result['total_filled'])
+            WHERE status NOT IN ('On Hold', 'Lost from Customer')
+            GROUP BY department
+            ORDER BY total_openings DESC
+        """)
+        dept_data = cursor.fetchall()
 
-    # Chart 2: Assigned To-wise
-    cursor.execute("""
-        SELECT assigned_to,
-               COALESCE(SUM(number_of_openings), 0) AS total_openings,
-               COALESCE(SUM(openings_filled), 0) AS total_filled
-        FROM requisitions
-        GROUP BY assigned_to
-    """)
-    assigned_data = cursor.fetchall()
-    assigned_to = [row['assigned_to'] for row in assigned_data]
-    assigned_openings = [row['total_openings'] for row in assigned_data]
-    assigned_filled = [row['total_filled'] for row in assigned_data]
+        departments = [row['department'] or 'Unassigned' for row in dept_data]
+        openings = [int(row['total_openings']) for row in dept_data]
+        filled = [int(row['total_filled']) for row in dept_data]
 
-    conn.close()
+        # 2. Recruiter Workload (Joined via requisition_assignments table)
+        cursor.execute("""
+            SELECT 
+                COALESCE(u.name, 'Unassigned') AS recruiter_name,
+                COALESCE(SUM(r.number_of_openings), 0) AS total_openings,
+                COALESCE(SUM(r.openings_filled), 0) AS total_filled
+            FROM requisitions r
+            LEFT JOIN requisition_assignments ra ON r.id = ra.requisition_id
+            LEFT JOIN users u ON ra.assigned_to_email = u.email
+            WHERE r.status NOT IN ('On Hold', 'Lost from Customer')
+            GROUP BY recruiter_name
+            ORDER BY total_openings DESC
+        """)
+        recruiter_data = cursor.fetchall()
 
-    return jsonify({
-        'departments': departments,
-        'openings': openings,
-        'filled': filled,
-        'assigned_to': assigned_to,
-        'assigned_openings': assigned_openings,
-        'assigned_filled': assigned_filled
-    })
+        assigned_to = [row['recruiter_name'] for row in recruiter_data]
+        assigned_openings = [int(row['total_openings']) for row in recruiter_data]
+        assigned_filled = [int(row['total_filled']) for row in recruiter_data]
+
+        # 3. Overall Metrics & Strategic KPIs
+        cursor.execute("""
+            SELECT 
+                COUNT(id) AS total_reqs,
+                SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END) AS open_reqs,
+                SUM(CASE WHEN status = 'Closed' THEN 1 ELSE 0 END) AS closed_reqs,
+                SUM(CASE WHEN status = 'On Hold' THEN 1 ELSE 0 END) AS on_hold_reqs,
+                COALESCE(SUM(number_of_openings), 0) AS total_openings,
+                COALESCE(SUM(openings_filled), 0) AS total_filled,
+                ROUND(AVG(COALESCE(ageing, DATEDIFF(CURDATE(), created_at))), 0) AS avg_ageing_days
+            FROM requisitions
+            WHERE status != 'Lost from Customer'
+        """)
+        metrics = cursor.fetchone() or {}
+
+        # 4. Candidate Funnel Metrics
+        cursor.execute("SELECT COUNT(*) AS total_candidates FROM candidates")
+        cand_res = cursor.fetchone()
+        total_candidates = cand_res['total_candidates'] if cand_res else 0
+
+        return jsonify({
+            'departments': departments,
+            'openings': openings,
+            'filled': filled,
+            'assigned_to': assigned_to,
+            'assigned_openings': assigned_openings,
+            'assigned_filled': assigned_filled,
+            'metrics': {
+                'total_openings': int(metrics.get('total_openings') or 0),
+                'total_filled': int(metrics.get('total_filled') or 0),
+                'open_reqs': int(metrics.get('open_reqs') or 0),
+                'closed_reqs': int(metrics.get('closed_reqs') or 0),
+                'on_hold_reqs': int(metrics.get('on_hold_reqs') or 0),
+                'avg_ageing_days': int(metrics.get('avg_ageing_days') or 0),
+                'total_candidates': int(total_candidates)
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error loading dashboard data: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
 
 # ------------------------------------------------------------------------------------#
-@app.route('/submit_requisition', methods=['POST'])
+@app.route('/submit_requisition', methods=['GET', 'POST'])
 def submit_requisition():
     data = request.form
     user_email = session['user']['email']
-    logger.info(f"User '{user_email}' is submitting a requisition.")
+    logger.info(f"User '{user_email}' accessing submit_requisition route.")
 
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cursor:
-            # Insert requisition
-            cursor.execute("""
-                INSERT INTO requisitions (
-                    job_title, department, number_of_openings,
-                    skills_required, location, hiring_type,
-                    budget, job_description, created_by
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                data['job_title'], data['department'], data['number_of_openings'],
-                data['skills_required'], data['location'], data['hiring_type'],
-                data['budget'], data['job_description'], user_email
-            ))
-            requisition_id = conn.insert_id()
-            logger.info(f"Inserted requisition ID: {requisition_id}")
+    if request.method == 'POST':
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cursor:
+                # 1. Insert requisition
+                po_value = data.get('po_value', '').strip()
+                po_value = float(po_value) if po_value else None
 
-            # Insert interview hierarchy
-            levels = int(data['levels'])
-            for i in range(1, levels + 1):
                 cursor.execute("""
-                    INSERT INTO interview_hierarchy (
-                        requisition_id, level, interviewer_name, interviewer_email
-                    ) VALUES (%s, %s, %s, %s)
+                    INSERT INTO requisitions (
+                        job_title, department, number_of_openings,
+                        skills_required, location, hiring_type, replacement_for,
+                        budget, job_description, po_value, created_by, customer_name,
+                        experience_required, work_location_type, screening_questions
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
-                    requisition_id, i, data[f'interviewer_name_{i}'], data[f'interviewer_email_{i}']
+                    data['job_title'], data['department'], data['number_of_openings'],
+                    data['skills_required'], data['location'], data['hiring_type'], data['replacement_for'],
+                    data['budget'], data['job_description'], po_value, user_email, data['customer_name'],
+                    data.get('experience_required'), data.get('work_location_type'), data.get('screening_questions')
                 ))
-                logger.info(f"Inserted level {i} interviewer: {data[f'interviewer_email_{i}']}")
+                requisition_id = conn.insert_id()
 
-        conn.commit()
-        logger.info(f"Requisition {requisition_id} committed to the database.")
+                logger.info(f"Inserted requisition ID: {requisition_id}")
 
-        # Email
-        success, message = send_requisition_email(data)
-        if success:
-            logger.info(f"Requisition email sent successfully for ID: {requisition_id}")
-            flash('Requisition submitted and email sent successfully!')
-        else:
-            logger.warning(f"Email failed for requisition ID {requisition_id}: {message}")
-            flash(f'Requisition submitted, but email failed: {message}')
+                # 2. Insert interview hierarchy
+                levels = int(data['levels'])
+                for i in range(1, levels + 1):
+                    level_value = f"Level-{i}"
+                    cursor.execute("""
+                        INSERT INTO interview_hierarchy (requisition_id, level, interviewer_name, interviewer_email)
+                        VALUES (%s, %s, %s, %s)
+                    """, (requisition_id, level_value, data[f'interviewer_name_{i}'], data[f'interviewer_email_{i}']))
 
-    except Exception as e:
-        logger.error(f"Error submitting requisition: {e}")
-        conn.rollback()
-        flash('An error occurred while submitting the requisition.')
-    finally:
-        conn.close()
-    return redirect(url_for('home', page='requisition'))
+                # 3. Insert department utilization
+                department_count = int(data.get('utilization_levels', 0))
+                for i in range(1, department_count + 1):
+                    dept_name = data.get(f'util_department_{i}')
+                    utilization = data.get(f'util_percent_{i}')
+                    if dept_name and utilization:
+                        cursor.execute("""
+                            INSERT INTO department_utilization (requisition_id, department_name, utilization)
+                            VALUES (%s, %s, %s)
+                        """, (requisition_id, dept_name, utilization))
+
+                # 4. Handle Level 2 Assessment (If Selected)
+                if data.get('has_level_2') == 'yes':
+                    import secrets
+                    title = data.get('assessment_title', 'Level 2 Assessment')
+                    duration = int(data.get('assessment_duration', 30))
+                    pass_rating = float(data.get('assessment_pass_rating', 2.0))
+                    selected_questions_json = data.get('selected_questions_json', '[]')
+
+                    try:
+                        selected_questions = json.loads(selected_questions_json)
+                    except:
+                        selected_questions = []
+
+                    if selected_questions:
+                        token = secrets.token_urlsafe(12)[:16]
+                        cursor.execute("""
+                            INSERT INTO assessments
+                            (title, description, requisition_id, total_questions, duration_minutes, pass_rating, is_sample, is_active, share_token, created_by, created_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, 0, 1, %s, %s, NOW())
+                        """, (title, f"Level 2 Assessment for {data['job_title']}", requisition_id,
+                              len(selected_questions), duration, pass_rating, token, user_email))
+
+                        assessment_id = cursor.lastrowid
+
+                        # Map JSON Questions to DB Schema
+                        for q in selected_questions:
+                            q_text = q.get('text', '')
+                            q_type = q.get('type', 'mcq')
+
+                            if q_type == 'code':
+                                q_type_db = 'MCQ_CODE'
+                            elif q_type in ('text', 'draw'):
+                                q_type_db = 'TEXT'
+                            else:
+                                q_type_db = 'MCQ_TEXT'
+
+                            options = q.get('options', [])
+                            oa = options[0] if len(options) > 0 else None
+                            ob = options[1] if len(options) > 1 else None
+                            oc = options[2] if len(options) > 2 else None
+                            od = options[3] if len(options) > 3 else None
+
+                            correct_idx = q.get('answerIndexes', [None])[0]
+                            correct = chr(65 + int(correct_idx)) if correct_idx is not None else None
+
+                            cursor.execute("""
+                                INSERT INTO assessment_questions
+                                (assessment_id, question_text, question_type, code_snippet, option_a, option_b, option_c, option_d, correct_option, expected_answer, difficulty, created_at)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                            """, (assessment_id, q_text, q_type_db, q.get('code_template', ''),
+                                  oa, ob, oc, od, correct, q.get('expected_answer', ''), 'Medium'))
+
+                        logger.info(f"Created Level 2 Assessment (ID: {assessment_id}) with {len(selected_questions)} questions")
+
+            conn.commit()
+            logger.info(f"Requisition {requisition_id} committed to the database.")
+
+            # Send email
+            success, message = send_requisition_email(data)
+            if success:
+                flash('Requisition submitted and email sent successfully!')
+            else:
+                flash(f'Requisition submitted, but email failed: {message}')
+
+        except Exception as e:
+            logger.error(f"Error submitting requisition: {e}")
+            conn.rollback()
+            flash('An error occurred while submitting the requisition.')
+        finally:
+            conn.close()
+
+        return redirect(url_for('home', page='requisition'))
+
+    return render_template('requisition.html')
 
 # ------------------------------------------------------------------------------------#
 def send_requisition_email(requisition_data):
@@ -334,13 +886,33 @@ def send_requisition_email(requisition_data):
         logger.error("Attempted to send email without authentication.")
         return False, "User not authenticated."
 
+    # Connect to DB to get HR Leads and Admins
+    conn = get_db_connection()
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute("SELECT email FROM users WHERE role IN ('hr lead', 'admin', 'manager') AND is_active = 1")
+            recipients = [row['email'] for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Failed to fetch HR Lead/Admin emails: {e}")
+        return False, "Failed to fetch HR Lead/Admin emails."
+    finally:
+        conn.close()
+
+    # Add the creator of the requisition if not already in the list
+    if requisition_data.get('created_by') and requisition_data['created_by'] not in recipients:
+        recipients.append(requisition_data['created_by'])
+
+    if not recipients:
+        logger.warning("No recipients found for requisition email.")
+        return False, "No recipients found."
+
     headers = {
         'Authorization': f'Bearer {access_token}',
         'Content-Type': 'application/json'
     }
 
     email_body = f"""
-Hi HR Team,
+Hi Team,
 
 A new requisition has been submitted by {user['name']}.
 
@@ -358,6 +930,9 @@ Regards,
 {user['name']}
 """
 
+    # Prepare recipients in Microsoft Graph format
+    to_recipients = [{"emailAddress": {"address": email}} for email in recipients]
+
     message = {
         "message": {
             "subject": "New Hiring Requisition Submitted",
@@ -365,9 +940,7 @@ Regards,
                 "contentType": "Text",
                 "content": email_body
             },
-            "toRecipients": [
-                {"emailAddress": {"address": "virajhumbre@orientindia.net"}}
-            ]
+            "toRecipients": to_recipients
         },
         "saveToSentItems": "true"
     }
@@ -379,11 +952,12 @@ Regards,
     )
 
     if response.status_code == 202:
-        logger.info(f"Email sent successfully to HR for requisition by {user['email']}")
+        logger.info(f"Email sent successfully to: {', '.join(recipients)}")
         return True, "Mail sent"
     else:
         logger.error(f"Failed to send email: {response.text}")
         return False, f"Failed to send mail: {response.text}"
+
 # ------------------------------------------------------------------------------------#
 # @app.route('/assign_requisition', methods=['GET', 'POST'])
 # def assign_requisition():
@@ -459,32 +1033,59 @@ def view_requisitions():
                 SET status = CASE
                     WHEN openings_filled = number_of_openings THEN 'Closed'
                     ELSE 'Open'
+                END,
+                closed_at = CASE
+                    WHEN openings_filled = number_of_openings AND closed_at IS NULL THEN CURRENT_TIMESTAMP
+                    ELSE closed_at
                 END
+                WHERE status NOT IN ('On Hold', 'Lost from Customer');
             """)
             conn.commit()
             logging.info("Requisition statuses updated based on openings_filled")
 
-            # Fetch requisitions
-            if user['role'] in ['admin', 'hr lead']:
+            # 2) Freeze ageing for newly closed requisitions
+            cursor.execute("""
+                UPDATE requisitions
+                SET ageing = DATEDIFF(CURDATE(), created_at)
+                WHERE status = 'Closed' AND ageing IS NULL;
+            """)
+            conn.commit()
+            logging.info("Ageing frozen for closed requisitions")
+
+            # 3) Fetch requisitions
+            if user['role'] in ['admin', 'manager', 'hr lead']:
                 logging.info(f"{user['email']} fetching all requisitions (Role: {user['role']})")
                 cursor.execute("""
-                    SELECT r.*, u1.name AS created_by_name, u2.name AS assigned_to_name
+                    SELECT 
+                        r.*,
+                        u1.name AS created_by_name,
+                        GROUP_CONCAT(DISTINCT u2.name) AS assigned_to_names,
+                        GROUP_CONCAT(DISTINCT ra.assigned_to_email) AS assigned_to_emails,
+                        COALESCE(r.ageing, DATEDIFF(CURDATE(), r.created_at)) AS ageing
                     FROM requisitions r
                     LEFT JOIN users u1 ON r.created_by = u1.email
-                    LEFT JOIN users u2 ON r.assigned_to = u2.email
-                    ORDER BY r.created_at DESC
+                    LEFT JOIN requisition_assignments ra ON ra.requisition_id = r.id
+                    LEFT JOIN users u2 ON ra.assigned_to_email = u2.email
+                    GROUP BY r.id
+                    ORDER BY r.created_at;
                 """)
             else:
-                logging.info(f"{user['email']} fetching assigned requisitions")
+                logging.info(f"{user['email']} fetching assigned or created requisitions")
                 cursor.execute("""
-                    SELECT r.id, r.job_title, r.department, r.created_at, r.created_by,
-                           r.assigned_to, r.status, u1.name AS created_by_name, u2.name AS assigned_to_name
+                    SELECT 
+                        r.*,
+                        u1.name AS created_by_name,
+                        GROUP_CONCAT(DISTINCT u2.name) AS assigned_to_names,
+                        GROUP_CONCAT(DISTINCT ra.assigned_to_email) AS assigned_to_emails,
+                        COALESCE(r.ageing, DATEDIFF(CURDATE(), r.created_at)) AS ageing
                     FROM requisitions r
                     LEFT JOIN users u1 ON r.created_by = u1.email
-                    LEFT JOIN users u2 ON r.assigned_to = u2.email
-                    WHERE r.assigned_to = %s
-                    ORDER BY r.created_at DESC
-                """, (user['email'],))
+                    LEFT JOIN requisition_assignments ra ON ra.requisition_id = r.id
+                    LEFT JOIN users u2 ON ra.assigned_to_email = u2.email
+                    WHERE ra.assigned_to_email = %s OR r.created_by = %s
+                    GROUP BY r.id
+                    ORDER BY r.created_at;
+                """, (user['email'], user['email']))
             requisitions = cursor.fetchall()
 
     except Exception as e:
@@ -494,7 +1095,6 @@ def view_requisitions():
         conn.close()
 
     return render_template('view_requisitions.html', requisitions=requisitions, user=user)
-
 
 
 # ------------------------------------------------------------------------------------#
@@ -509,11 +1109,23 @@ def view_requisition_details(requisition_id):
     user = session['user']
     logging.info(f"{user['email']} accessing requisition ID {requisition_id}")
     conn = get_db_connection()
+
     requisition = None
     hr_users = []
+    assigned_users = []
+    assigned_user_emails = []
+    utilization_data = []
+    interview_hierarchy = []
 
     try:
         with conn.cursor() as cursor:
+
+            cursor.execute("SELECT * FROM requisitions WHERE id = %s", (requisition_id,))
+            requisition = cursor.fetchone()
+            logging.debug(f"Raw requisition data: {requisition}")
+
+
+            # Fetch requisition with creator/assignee info
             cursor.execute("""
                 SELECT r.*, u1.name AS created_by_name, u2.name AS assigned_to_name
                 FROM requisitions r
@@ -524,26 +1136,73 @@ def view_requisition_details(requisition_id):
             requisition = cursor.fetchone()
 
             if not requisition:
-                logging.warning(f"Requisition {requisition_id} not found.")
+                conn.close()  # explicitly close connection here since finally block might not be reached due to return
                 flash("Requisition not found", "warning")
                 return redirect(url_for('view_requisitions'))
 
+
+            # Fetch list of assigned HRs from requisition_assignments table
+            cursor.execute("""
+                SELECT u.name, u.email
+                FROM requisition_assignments ra
+                JOIN users u ON ra.assigned_to_email = u.email
+                WHERE ra.requisition_id = %s
+            """, (requisition_id,))
+            assigned_users = cursor.fetchall()
+            assigned_user_emails = [u['email'] for u in assigned_users]
+
+            # Fetch all HR users for assignment
             if user['role'] in ['admin', 'hr lead']:
-                logging.info(f"{user['email']} fetching HR users for assignment")
                 cursor.execute("SELECT name, email FROM users WHERE role = 'hr'")
                 hr_users = cursor.fetchall()
 
+            # Handle assignment form submission
             if request.method == 'POST' and user['role'] in ['admin', 'hr lead']:
-                assigned_to = request.form['assigned_to']
-                cursor.execute("""
-                    UPDATE requisitions
-                    SET assigned_to = %s
-                    WHERE id = %s
-                """, (assigned_to, requisition_id))
+                selected_emails = request.form.getlist('assigned_to')
+
+                # Remove existing assignments
+                cursor.execute("DELETE FROM requisition_assignments WHERE requisition_id = %s", (requisition_id,))
+
+                # Insert new assignments
+                for email in selected_emails:
+                    cursor.execute("""
+                        INSERT INTO requisition_assignments (requisition_id, assigned_to_email,  assigned_by_email)
+                        VALUES (%s, %s, %s)
+                    """, (requisition_id, email, user['email']))
+
+                    logging.info(f"{user['email']} assigned requisition ID {requisition_id} to {email}")
+
                 conn.commit()
-                logging.info(f"Requisition {requisition_id} assigned to {assigned_to} by {user['email']}")
-                flash("Requisition successfully assigned!", "success")
+                flash("Requisition successfully assigned to selected HRs!", "success")
+
+                if selected_emails:
+                    send_assignment_email(requisition, selected_emails, user['name'])
+
                 return redirect(url_for('view_requisition_details', requisition_id=requisition_id))
+
+            # Fetch department utilization
+            cursor.execute("""
+                SELECT department_name, utilization
+                FROM department_utilization
+                WHERE requisition_id = %s
+            """, (requisition_id,))
+            utilization_data = cursor.fetchall()
+
+            # Fetch interview hierarchy
+            cursor.execute("""
+                SELECT level, interviewer_name, interviewer_email
+                FROM interview_hierarchy
+                WHERE requisition_id = %s
+                ORDER BY level ASC
+            """, (requisition_id,))
+            interview_hierarchy = cursor.fetchall()
+
+            # Check if a Level 2 Assessment exists
+            # 👇 Change "SELECT id" to "SELECT *"
+            cursor.execute("SELECT * FROM assessments WHERE requisition_id = %s ORDER BY id DESC LIMIT 1",
+                           (requisition_id,))
+            req_assessment = cursor.fetchone()
+            has_assessment = True if req_assessment else False
 
     except Exception as e:
         logging.error(f"Error fetching requisition details: {e}")
@@ -551,7 +1210,77 @@ def view_requisition_details(requisition_id):
     finally:
         conn.close()
 
-    return render_template('requisition_details.html', requisition=requisition, hr_users=hr_users, user=user)
+    return render_template(
+        'requisition_details.html',
+        requisition=requisition,
+        hr_users=hr_users,
+        user=user,
+        utilization_data=utilization_data,
+        interview_hierarchy=interview_hierarchy,
+        assigned_users=assigned_users,
+        assigned_user_emails=assigned_user_emails,
+        has_assessment=has_assessment,
+        req_assessment=req_assessment
+    )
+
+def send_assignment_email(requisition_data, assigned_emails, assigned_by_name):
+    access_token = session.get("access_token")
+    if not access_token:
+        logger.error("Attempted to send email without authentication.")
+        return False, "User not authenticated."
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    email_body = f"""
+Hi HR Team,
+
+You have been assigned a new requisition by {assigned_by_name}.
+
+Job Title: {requisition_data['job_title']}
+Department: {requisition_data['department']}
+No. of Openings: {requisition_data['number_of_openings']}
+Skills Required: {requisition_data['skills_required']}
+Location: {requisition_data['location']}
+Budget: {requisition_data['budget']}
+Type: {requisition_data['hiring_type']}
+
+Please take the necessary action.
+
+Regards,
+{assigned_by_name}
+"""
+
+    # Prepare recipients for Microsoft Graph
+    to_recipients = [{"emailAddress": {"address": email}} for email in assigned_emails]
+
+    message = {
+        "message": {
+            "subject": "New Requisition Assigned",
+            "body": {
+                "contentType": "Text",
+                "content": email_body
+            },
+            "toRecipients": to_recipients
+        },
+        "saveToSentItems": "true"
+    }
+
+    response = requests.post(
+        'https://graph.microsoft.com/v1.0/me/sendMail',
+        headers=headers,
+        json=message
+    )
+
+    if response.status_code == 202:
+        logger.info(f"Assignment email sent successfully to: {', '.join(assigned_emails)}")
+        return True, "Mail sent"
+    else:
+        logger.error(f"Failed to send email: {response.text}")
+        return False, f"Failed to send mail: {response.text}"
+
 
 @app.route('/requisition/<int:requisition_id>/edit', methods=['GET', 'POST'])
 def edit_requisition(requisition_id):
@@ -561,24 +1290,103 @@ def edit_requisition(requisition_id):
         with conn.cursor(pymysql.cursors.DictCursor) as cursor:
             if request.method == 'POST':
                 form = request.form
+                manual_status = form.get("status")
+
+                allowed_manual_statuses = ['On Hold', 'Lost from Customer']
+                if manual_status not in allowed_manual_statuses:
+                    cursor.execute("SELECT status FROM requisitions WHERE id = %s", (requisition_id,))
+                    current_req = cursor.fetchone()
+                    manual_status = current_req['status'] if current_req else 'Pending'
+
+                # --- Update requisition table (INCLUDING NEW FIELDS) ---
                 cursor.execute("""
                     UPDATE requisitions SET
                         job_title = %s, department = %s, number_of_openings = %s,
                         skills_required = %s, location = %s, hiring_type = %s,
-                        budget = %s, job_description = %s
+                        budget = %s, job_description = %s, customer_name = %s, status = %s,
+                        experience_required = %s, work_location_type = %s, screening_questions = %s
                     WHERE id = %s
                 """, (
                     form['job_title'], form['department'], form['number_of_openings'],
                     form['skills_required'], form['location'], form['hiring_type'],
-                    form['budget'], form['job_description'], requisition_id
+                    form['budget'], form['job_description'], form['customer_name'], manual_status,
+                    form.get('experience_required'), form.get('work_location_type'), form.get('screening_questions'),
+                    requisition_id
                 ))
+
+                # --- Department Utilization Incremental Update ---
+                cursor.execute("SELECT id, department_name, utilization FROM department_utilization WHERE requisition_id = %s", (requisition_id,))
+                existing_utilization = cursor.fetchall()
+                existing_util_map = {(row['department_name'], str(row['utilization'])): row['id'] for row in existing_utilization}
+                submitted_utils = set()
+
+                count_util = int(form.get('utilization_count', 0))
+                for i in range(1, count_util + 1):
+                    dept = form.get(f'department_name_{i}')
+                    util = form.get(f'utilization_{i}')
+                    if dept and util:
+                        key = (dept, str(util))
+                        submitted_utils.add(key)
+                        if key not in existing_util_map:
+                            cursor.execute("""
+                                INSERT INTO department_utilization (requisition_id, department_name, utilization)
+                                VALUES (%s, %s, %s)
+                            """, (requisition_id, dept, util))
+
+                for key, record_id in existing_util_map.items():
+                    if key not in submitted_utils:
+                        cursor.execute("DELETE FROM department_utilization WHERE id = %s", (record_id,))
+
+                # --- Interview Hierarchy Incremental Update ---
+                cursor.execute("SELECT id, level, interviewer_name, interviewer_email FROM interview_hierarchy WHERE requisition_id = %s", (requisition_id,))
+                existing_hierarchy = cursor.fetchall()
+                existing_hierarchy_map = {(row['level'], row['interviewer_name'], row['interviewer_email']): row['id'] for row in existing_hierarchy}
+                submitted_hierarchy = set()
+
+                count_hierarchy = int(form.get('hierarchy_count', 0))
+                for i in range(1, count_hierarchy + 1):
+                    name = form.get(f'interviewer_name_{i}')
+                    email = form.get(f'interviewer_email_{i}')
+                    if name and email:
+                        level_label = f"Level-{i}"
+                        key = (level_label, name, email)
+                        submitted_hierarchy.add(key)
+                        if key not in existing_hierarchy_map:
+                            cursor.execute("""
+                                INSERT INTO interview_hierarchy (requisition_id, level, interviewer_name, interviewer_email)
+                                VALUES (%s, %s, %s, %s)
+                            """, (requisition_id, level_label, name, email))
+
+                for key, record_id in existing_hierarchy_map.items():
+                    if key not in submitted_hierarchy:
+                        cursor.execute("DELETE FROM interview_hierarchy WHERE id = %s", (record_id,))
+
                 conn.commit()
                 flash("Requisition updated successfully!", "success")
-                return redirect(url_for('view_requisition', requisition_id=requisition_id))
+                return redirect(url_for('view_requisitions'))
 
-            # GET request – fetch requisition
+            # --- GET request - load data to edit ---
             cursor.execute("SELECT * FROM requisitions WHERE id = %s", (requisition_id,))
             requisition = cursor.fetchone()
+
+            cursor.execute("SELECT * FROM department_utilization WHERE requisition_id = %s", (requisition_id,))
+            department_utilization = cursor.fetchall()
+
+            cursor.execute("""
+                SELECT * FROM interview_hierarchy 
+                WHERE requisition_id = %s 
+                ORDER BY CAST(SUBSTRING_INDEX(level, '-', -1) AS UNSIGNED) ASC
+            """, (requisition_id,))
+            interview_hierarchy = cursor.fetchall()
+
+            cursor.execute("SELECT DISTINCT department_name FROM department_utilization WHERE department_name IS NOT NULL AND department_name != ''")
+            departments_db = [row['department_name'] for row in cursor.fetchall()]
+            default_departments = ["Engineering", "HR", "Sales", "Marketing", "Finance", "Operations", "IT"]
+            departments = sorted(list(set(departments_db + default_departments)))
+
+            cursor.execute("SELECT DISTINCT customer_name FROM requisitions WHERE customer_name IS NOT NULL AND customer_name != ''")
+            customers = [row['customer_name'] for row in cursor.fetchall()]
+
     except Exception as e:
         logger.error(f"Error in edit_requisition: {e}")
         flash("Something went wrong while editing the requisition.", "danger")
@@ -586,7 +1394,15 @@ def edit_requisition(requisition_id):
     finally:
         conn.close()
 
-    return render_template("edit_requisition.html", requisition=requisition, user=user)
+    return render_template("edit_requisition.html",
+                           requisition=requisition,
+                           department_utilization=department_utilization,
+                           interview_hierarchy=interview_hierarchy,
+                           departments=departments,
+                           customers=customers,
+                           user=user)
+
+
 
 # Helper function to check TAT breach
 def check_tat_breach(requisition):
@@ -757,71 +1573,265 @@ def update_role(user_id):
 
 # ------------------------------------------------------------------------------------#
 
-def get_requisitions(email, user):
-    logging.info(f"Fetching requisitions for {email} (Role: {user})")
+def get_requisitions(email, role):
+    logging.info(f"Fetching requisitions for {email} (Role: {role})")
     connection = get_db_connection()
     with connection.cursor() as cursor:
-        if user in ['admin', 'hr lead']:
-            cursor.execute("SELECT * FROM requisitions")
+        if role in ['admin', 'hr lead','manager']:
+            cursor.execute("""
+                SELECT r.id, r.job_title, r.department, r.customer_name, 
+                       r.number_of_openings, r.openings_filled
+                FROM requisitions r
+                ORDER BY r.created_at DESC
+            """)
         else:
-            cursor.execute("SELECT * FROM requisitions WHERE assigned_to = %s", (email,))
+            cursor.execute("""
+                SELECT r.id, r.job_title, r.department, r.customer_name, 
+                       r.number_of_openings, r.openings_filled
+                FROM requisitions r
+                JOIN requisition_assignments ra ON r.id = ra.requisition_id
+                WHERE ra.assigned_to_email = %s
+                ORDER BY r.created_at DESC
+            """, (email,))
+
         requisitions = cursor.fetchall()
         logging.info(f"Found {len(requisitions)} requisitions")
+
     connection.close()
     return requisitions
+
 
 
 @app.route('/submit_candidate', methods=['GET', 'POST'])
 def submit_candidate():
     logging.info("Accessed /submit_candidate route")
-    logging.debug(f"Session contents: {session}")
-    print("Session contents:", session)
+
     if 'user' not in session:
         logging.warning("Unauthorized access attempt to submit_candidate")
         return redirect(url_for('home'))
-
 
     user_id = session['user']['email']
     user = session['user']['role']
     requisitions = get_requisitions(user_id, user)
 
-
     if request.method == 'POST':
-        logging.info(f"Candidate submission attempt by user: {user_id}")
+        try:
+            name = request.form['name']
+            email = request.form['email']
+            phone = request.form['phone']
+            skills = request.form['skills']
+            requisition_id = request.form['requisition_id']
+            years = int(request.form.get('total_exp_years', 0))
+            months = int(request.form.get('total_exp_months', 0))
+            total_exp = years * 12 + months  # store total experience in months
+            current_loc = request.form['current_loc']
+            current_ctc = request.form['current_ctc']
+            exp_ctc = request.form['exp_ctc']
+            source = request.form['source']
+            designation = request.form['designation']
+            notice_period = request.form['notice_period']
+            reason_for_change = request.form['reason_for_change']
+            holding_other_offer = request.form['holding_other_offer']
 
-        name = request.form['name']
-        email = request.form['email']
-        phone = request.form['phone']
-        skills = request.form['skills']
-        requisition_id = request.form['requisition_id']
-        resume_file = request.files['resume']
-        total_exp = request.form['total_exp']
-        current_loc = request.form['current_loc']
-        current_ctc = request.form['current_ctc']
-        exp_ctc = request.form['exp_ctc']
-        source = request.form['source']
-        
-        allowed_ids = [str(r['id']) for r in requisitions]
-        if requisition_id not in allowed_ids:
-            logging.error(f"Unauthorized requisition access attempt by {user_id} for requisition_id {requisition_id}")
-            return "Unauthorized access to requisition", 403
+            if source == "Other":
+                source = request.form.get("other_source")
 
-        resume_blob = resume_file.read()
+            if 'resume' not in request.files:
+                return jsonify({"status": "error", "message": "Resume is required"}), 400
 
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
+            resume_file = request.files['resume']
+            resume_blob = resume_file.read()
+
+            allowed_ids = [str(r['id']) for r in requisitions]
+            if requisition_id not in allowed_ids:
+                return jsonify({"status": "error", "message": "Unauthorized requisition access"}), 403
+
+            connection = get_db_connection()
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO candidates (
+                        name, email, phone, skills, requisition_id, resume, submitted_by,
+                        total_exp, current_loc, current_ctc, exp_ctc, source,
+                        designation, notice_period, reason_for_change, holding_other_offer
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    name, email, phone, skills, requisition_id, resume_blob, user_id,
+                    total_exp, current_loc, current_ctc, exp_ctc, source,
+                    designation, notice_period, reason_for_change, holding_other_offer
+                ))
+                connection.commit()
+            connection.close()
+
+            logging.info(f"Candidate {name} submitted successfully by {user_id}")
+            return jsonify({"status": "success"}), 200
+
+        except Exception as e:
+            logging.exception("Error while submitting candidate")
+            return jsonify({"status": "error", "message": str(e)}), 500
+
+    return render_template('submit_candidate.html', requisitions=requisitions, user=session['user'])
+
+@app.route('/update_candidate/<int:id>', methods=['POST'])
+def update_candidate(id):
+    if 'user' not in session:
+        return jsonify({"status": "error", "message": "Unauthorized"}), 401
+
+    user_role = session['user'].get('role')
+    user_email = session['user'].get('email')
+
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # 1. Check candidate existence and current access permissions
+            cursor.execute("SELECT submitted_by FROM candidates WHERE id = %s", (id,))
+            candidate = cursor.fetchone()
+
+            if not candidate:
+                return jsonify({"status": "error", "message": "Candidate not found"}), 404
+
+            if user_role == 'requestor' and candidate['submitted_by'] != user_email:
+                return jsonify({"status": "error", "message": "Permission denied"}), 403
+
+            # 2. Extract form data (including requisition_id)
+            requisition_id = request.form.get('requisition_id')
+
+            # Optional: Validate requisition access if provided
+            if requisition_id:
+                requisitions = get_requisitions(user_email, user_role)
+                allowed_ids = [str(r['id']) for r in requisitions]
+                if str(requisition_id) not in allowed_ids:
+                    return jsonify({"status": "error", "message": "Unauthorized requisition access"}), 403
+
+            name = request.form.get('name')
+            email = request.form.get('email')
+            phone = request.form.get('phone')
+            skills = request.form.get('skills')
+            years = int(request.form.get('total_exp_years', 0))
+            months = int(request.form.get('total_exp_months', 0))
+            total_exp = years * 12 + months
+            current_loc = request.form.get('current_loc')
+            current_ctc = request.form.get('current_ctc')
+            exp_ctc = request.form.get('exp_ctc')
+            designation = request.form.get('designation')
+            notice_period = request.form.get('notice_period')
+            reason_for_change = request.form.get('reason_for_change')
+            holding_other_offer = request.form.get('holding_other_offer')
+            source = request.form.get('source')
+
+            if source == "Other":
+                source = request.form.get("other_source")
+
+            # 3. Handle Optional Resume Upload
+            resume_blob = None
+            if 'resume' in request.files and request.files['resume'].filename:
+                resume_file = request.files['resume']
+                resume_blob = resume_file.read()
+
+            # 4. Construct Query Parameters matching all columns from submit_candidate
+            if resume_blob:
+                resume_clause = ", resume=%s"
+                params = (
+                    name, email, phone, skills, requisition_id, total_exp,
+                    current_loc, current_ctc, exp_ctc, source, designation,
+                    notice_period, reason_for_change, holding_other_offer,
+                    user_email, resume_blob, id
+                )
+            else:
+                resume_clause = ""
+                params = (
+                    name, email, phone, skills, requisition_id, total_exp,
+                    current_loc, current_ctc, exp_ctc, source, designation,
+                    notice_period, reason_for_change, holding_other_offer,
+                    user_email, id
+                )
+
+            base_query = f"""
+                UPDATE candidates 
+                SET name=%s, 
+                    email=%s, 
+                    phone=%s, 
+                    skills=%s, 
+                    requisition_id=%s, 
+                    total_exp=%s,
+                    current_loc=%s, 
+                    current_ctc=%s, 
+                    exp_ctc=%s, 
+                    source=%s, 
+                    designation=%s,
+                    notice_period=%s, 
+                    reason_for_change=%s, 
+                    holding_other_offer=%s,
+                    submitted_by=%s
+                    {resume_clause}
+                WHERE id=%s
+            """
+
+            cursor.execute(base_query, params)
+            conn.commit()
+
+        return jsonify({"status": "success"}), 200
+
+    except Exception as e:
+        logging.exception("Error updating candidate")
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        if 'conn' in locals() and conn:
+            conn.close()
+
+
+@app.route('/check_candidate', methods=['POST'])
+def check_candidate():
+    name = request.json.get("name")
+    email = request.json.get("email")
+    phone = request.json.get("phone")
+
+    if not (name or email or phone):
+        return jsonify({"status": "error", "message": "At least one of name, email, or phone is required"}), 400
+
+    try:
+        conn = get_db_connection()
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
             cursor.execute("""
-                INSERT INTO candidates (name, email, phone, skills, requisition_id, resume, submitted_by, total_exp,
-                           current_loc, current_ctc, exp_ctc, source)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (name, email, phone, skills, requisition_id, resume_blob, user_id, total_exp, current_loc, current_ctc,
-                  exp_ctc, source))
-            connection.commit()
-        connection.close()
-        logging.info(f"Candidate {name} submitted successfully by {user_id}")
-        return 'success'  # This will trigger the modal on success
+                SELECT id, name, email, phone, skills, designation 
+                FROM candidates 
+                WHERE name = %s OR email = %s OR phone = %s
+            """, (name, email, phone))
+            candidate = cursor.fetchone()
+        conn.close()
 
-    return render_template('submit_candidate.html', requisitions=requisitions, user = session['user'])
+        if candidate:
+            return jsonify({"status": "found", "candidate": candidate}), 200
+        else:
+            return jsonify({"status": "not_found"}), 200
+
+    except Exception as e:
+        logging.exception("Error while checking candidate")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/get_candidate/<int:id>', methods=['GET'])
+def get_candidate(id):
+    try:
+        conn = get_db_connection()
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute("""
+                SELECT id, name, email, phone, skills, total_exp, current_loc, 
+                       current_ctc, exp_ctc, designation, notice_period, 
+                       reason_for_change, holding_other_offer, source 
+                FROM candidates WHERE id = %s
+            """, (id,))
+            candidate = cursor.fetchone()
+        conn.close()
+
+        if candidate:
+            return jsonify({"status": "success", "candidate": candidate})
+        else:
+            return jsonify({"status": "error", "message": "Candidate not found"}), 404
+    except Exception as e:
+        logging.exception("Error fetching candidate")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 
 # ------------------------------------------------------------------------------------#
 @app.route('/view_candidates')
@@ -839,26 +1849,44 @@ def view_candidates():
             user_email = session['user']['email']
             logging.info(f"{user_email} ({user_role}) is viewing candidates")
 
-            if user_role == 'hr':
-                query = """
-                    SELECT c.*, r.job_title AS requisition_title,
-                    c.offer_letter IS NOT NULL AS offer_exists
-                    FROM candidates c
-                    JOIN requisitions r ON c.requisition_id = r.id
-                    WHERE c.submitted_by = %s
-                """
-                cursor.execute(query, (user_email,))
+            base_query = """
+                SELECT 
+                    c.id, c.name, c.email, c.phone, u.name AS shortlisted_by, c.shortlisted_on,
+                    c.submitted_by, c.is_shortlisted, c.selection_status,
+                    r.job_title AS requisition_title,
+                    c.offer_letter IS NOT NULL AS offer_exists,
+                    (
+                        SELECT COUNT(*) 
+                        FROM interview_hierarchy ih 
+                        WHERE ih.requisition_id = c.requisition_id
+                    ) AS total_levels,
+                    (
+                        SELECT COUNT(*) 
+                        FROM ratings ra 
+                        WHERE ra.candidate_id = c.id AND ra.status IN ('selected', 'rejected')
+                    ) AS completed_levels,
+                    (
+                        SELECT COUNT(*) 
+                        FROM ratings ra 
+                        WHERE ra.candidate_id = c.id AND ra.status = 'rejected'
+                    ) AS rejected_levels
+                FROM candidates c
+                JOIN requisitions r ON c.requisition_id = r.id
+                LEFT JOIN users u ON c.shortlisted_by = u.id
+                {where_clause}
+            """
+
+
+            if user_role  in ['hr','requestor']:
+                where_clause = "WHERE c.submitted_by = %s"
+                cursor.execute(base_query.format(where_clause=where_clause), (user_email,))
             else:
-                query = """
-                    SELECT c.*, r.job_title AS requisition_title,
-                    c.offer_letter IS NOT NULL AS offer_exists
-                    FROM candidates c
-                    JOIN requisitions r ON c.requisition_id = r.id
-                """
-                cursor.execute(query)
+                where_clause = ""
+                cursor.execute(base_query.format(where_clause=where_clause))
 
             candidates = cursor.fetchall()
             logging.info(f"Retrieved {len(candidates)} candidates")
+
     except Exception as e:
         logging.exception("Error while fetching candidates:")
         return "Error loading candidates", 500
@@ -866,6 +1894,7 @@ def view_candidates():
         conn.close()
 
     return render_template('view_candidates.html', candidates=candidates, user=session['user'])
+
 
 
 @app.route('/update_selection_status/<int:candidate_id>', methods=['POST'])
@@ -877,34 +1906,137 @@ def update_selection_status(candidate_id):
 
     conn = get_db_connection()
     try:
-        with conn.cursor() as cursor:
-            # Get current selection_status and requisition_id of candidate
-            cursor.execute("SELECT selection_status, requisition_id FROM candidates WHERE id = %s", (candidate_id,))
-            result = cursor.fetchone()
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            # Fetch current candidate info
+            cursor.execute("""
+                SELECT c.selection_status, c.requisition_id, r.job_title, r.department,
+                       r.number_of_openings, r.openings_filled, r.created_by
+                FROM candidates c
+                JOIN requisitions r ON c.requisition_id = r.id
+                WHERE c.id = %s
+            """, (candidate_id,))
+            candidate = cursor.fetchone()
 
-            if not result:
+            if not candidate:
                 logging.warning(f"No candidate found with ID {candidate_id}")
                 return jsonify({'success': False, 'message': 'Candidate not found'})
 
-            current_status = result['selection_status']
-            requisition_id = result['requisition_id']
+            current_status = candidate['selection_status']
+            requisition_id = candidate['requisition_id']
 
-            # Update selection_status only if it's changing
+            # Update only if status is changing
             if current_status != new_status:
-                cursor.execute(
-                    "UPDATE candidates SET selection_status = %s WHERE id = %s",
-                    (new_status, candidate_id)
-                )
 
-                # Only increment openings_filled if changing from non-Selected to Selected
-                if new_status == 'selected' and current_status != 'selected':
+                # 🔥 Track timestamp for Did Not Join in candidates table
+                if new_status == 'Did Not Join':
+                    cursor.execute("""
+                        UPDATE candidates 
+                        SET selection_status = %s, did_not_join_date = NOW()
+                        WHERE id = %s
+                    """, (new_status, candidate_id))
+                    logging.info(f"Candidate {candidate_id} marked as Did Not Join at {datetime.now()}")
+                else:
+                    # Normal status update without timestamp
+                    cursor.execute(
+                        "UPDATE candidates SET selection_status = %s WHERE id = %s",
+                        (new_status, candidate_id)
+                    )
+
+                # Handle openings_filled changes
+                if new_status == 'Selected' and current_status != 'Selected':
+                    # Candidate newly selected → increment
                     cursor.execute("""
                         UPDATE requisitions
                         SET openings_filled = openings_filled + 1
                         WHERE id = %s AND openings_filled < number_of_openings
                     """, (requisition_id,))
+                    logging.info(f"Incremented openings_filled for requisition {requisition_id}")
 
-            conn.commit()
+                elif current_status == 'Selected' and new_status != 'Selected':
+                    # 🔥 Candidate backed out → decrement, reopen, and track reopened date
+                    cursor.execute("""
+                        UPDATE requisitions
+                        SET openings_filled = openings_filled - 1,
+                            status = 'Open',
+                            closed_at = NULL,
+                            reopened_at = NOW()
+                        WHERE id = %s AND openings_filled > 0
+                    """, (requisition_id,))
+                    logging.info(f"Requisition {requisition_id} reopened at {datetime.now()}")
+
+                conn.commit()
+
+                # Fetch updated requisition info
+                cursor.execute("""
+                    SELECT number_of_openings, openings_filled, created_by, job_title, department
+                    FROM requisitions
+                    WHERE id = %s
+                """, (requisition_id,))
+                requisition = cursor.fetchone()
+
+                # Send email notification
+                cursor.execute("SELECT email FROM users WHERE role IN ('hr lead', 'admin')")
+                recipients = [row['email'] for row in cursor.fetchall()]
+
+                if requisition['created_by'] not in recipients:
+                    recipients.append(requisition['created_by'])
+
+                # Prepare email content
+                if new_status == 'Selected':
+                    status_msg = f"Candidate SELECTED for '{requisition['job_title']}'. {requisition['openings_filled']} out of {requisition['number_of_openings']} positions filled."
+                elif current_status == 'Selected' and new_status != 'Selected':
+                    if new_status == 'Did Not Join':
+                        status_msg = f"⚠️ Candidate DID NOT JOIN after selection for '{requisition['job_title']}'. Position is now OPEN again. {requisition['openings_filled']} out of {requisition['number_of_openings']} positions currently filled."
+                    else:
+                        status_msg = f"Candidate selection REVERSED (now {new_status}) for '{requisition['job_title']}'. {requisition['openings_filled']} out of {requisition['number_of_openings']} positions now filled. Requisition REOPENED."
+                else:
+                    status_msg = f"Candidate status changed to {new_status}"
+
+                email_body = f"""
+Hi Team,
+
+Candidate status updated from '{current_status}' to '{new_status}'.
+
+{status_msg}
+
+Regards,
+HR Portal System
+"""
+
+                # Send email via Microsoft Graph
+                access_token = session.get("access_token")
+                if access_token and recipients:
+                    headers = {
+                        'Authorization': f'Bearer {access_token}',
+                        'Content-Type': 'application/json'
+                    }
+                    to_recipients = [{"emailAddress": {"address": email}} for email in recipients]
+
+                    message = {
+                        "message": {
+                            "subject": f"Candidate Selection Update - {requisition['job_title']}",
+                            "body": {
+                                "contentType": "Text",
+                                "content": email_body
+                            },
+                            "toRecipients": to_recipients
+                        },
+                        "saveToSentItems": "true"
+                    }
+
+                    response = requests.post(
+                        'https://graph.microsoft.com/v1.0/me/sendMail',
+                        headers=headers,
+                        json=message
+                    )
+                    if response.status_code == 202:
+                        logging.info(f"Selection update email sent to: {', '.join(recipients)}")
+                    else:
+                        logging.error(f"Failed to send selection email: {response.text}")
+
+            else:
+                conn.commit()
+
             logging.info(f"Updated candidate {candidate_id} status from '{current_status}' to '{new_status}'")
             return jsonify({'success': True})
 
@@ -912,80 +2044,192 @@ def update_selection_status(candidate_id):
         conn.rollback()
         logging.exception(f"Failed to update selection status for candidate {candidate_id}")
         return jsonify({'success': False, 'message': 'Database error'})
+
     finally:
         conn.close()
+
+
+
+@app.route('/interviewer_candidates')
+def interviewer_candidates():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    user = session['user']
+    email = user['email']
+    role = user['role']
+
+    if role != 'interviewer':
+        return "Access Denied", 403
+
+    query = """
+        SELECT c.*, r.job_title AS requisition_title
+        FROM candidates c
+        JOIN interview_schedule i ON c.id = i.candidate_id
+        JOIN requisitions r ON c.requisition_id = r.id
+        WHERE i.interviewer_email = %s
+        ORDER BY i.interview_datetime
+    """
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(query, (email,))
+    candidates = cursor.fetchall()
+    cursor.close()
+
+    return render_template('interviewer_candidates.html', candidates=candidates, user=user)
 
 
 
 @app.route('/update_onboarding/<int:candidate_id>', methods=['POST'])
 def update_onboarding(candidate_id):
+    user = session.get('user')
+    access_token = session.get("access_token")
+
     final_ctc             = request.form.get('final_ctc')
     planned_joining_date  = request.form.get('planned_joining_date')
-    actual_joining_date   = request.form.get('actual_joining_date')
     offer_file            = request.files.get('offer_letter')
+    offer_letter_date     = datetime.now() if offer_file and offer_file.filename else None
 
-    logger.info(f"Updating onboarding info for candidate ID: {candidate_id}")
+    logger.info(f"{user['email']} is updating onboarding for candidate {candidate_id}")
 
     conn = get_db_connection()
+    candidate_name, requisition_id, recipients = None, None, []
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            # 🔹 Get candidate info + requisition_id
+            cursor.execute("SELECT id, name, requisition_id FROM candidates WHERE id = %s", (candidate_id,))
+            candidate = cursor.fetchone()
+            if not candidate:
+                return jsonify(success=False, error="Candidate not found")
+
+            candidate_name = candidate["name"]
+            requisition_id = candidate["requisition_id"]
+
+            # 🔹 Update candidate onboarding fields
             if offer_file and offer_file.filename:
                 offer_blob = offer_file.read()
-                if offer_blob:
-                    logger.info(f"Offer letter uploaded for candidate ID: {candidate_id}")
-                    cursor.execute("""
-                        UPDATE candidates
-                        SET final_ctc = %s,
-                            planned_joining_date = %s,
-                            actual_joining_date = %s,
-                            offer_letter = %s
-                        WHERE id = %s
-                    """, (
-                        final_ctc or None,
-                        planned_joining_date or None,
-                        actual_joining_date or None,
-                        offer_blob,
-                        candidate_id
-                    ))
-                else:
-                    logger.warning(f"Empty file submitted for offer letter - candidate ID: {candidate_id}")
-                    cursor.execute("""
-                        UPDATE candidates
-                        SET final_ctc = %s,
-                            planned_joining_date = %s,
-                            actual_joining_date = %s
-                        WHERE id = %s
-                    """, (
-                        final_ctc or None,
-                        planned_joining_date or None,
-                        actual_joining_date or None,
-                        candidate_id
-                    ))
-            else:
-                logger.info(f"No offer letter uploaded for candidate ID: {candidate_id}")
                 cursor.execute("""
                     UPDATE candidates
                     SET final_ctc = %s,
                         planned_joining_date = %s,
-                        actual_joining_date = %s
+                        offer_letter = %s,
+                        offer_letter_date = %s
                     WHERE id = %s
                 """, (
                     final_ctc or None,
                     planned_joining_date or None,
-                    actual_joining_date or None,
+                    offer_blob,
+                    offer_letter_date,
+                    candidate_id
+                ))
+            else:
+                cursor.execute("""
+                    UPDATE candidates
+                    SET final_ctc = %s,
+                        planned_joining_date = %s,
+                        offer_letter_date = %s
+                    WHERE id = %s
+                """, (
+                    final_ctc or None,
+                    planned_joining_date or None,
+                    offer_letter_date,
                     candidate_id
                 ))
 
-        conn.commit()
-        logger.info(f"Successfully updated candidate ID: {candidate_id}")
-        return jsonify(success=True)
+            conn.commit()
+
+            # 🔹 Fetch HR Lead (from users table), assigned_to_email, assigned_by_email
+            cursor.execute("""
+                SELECT DISTINCT u.email
+                FROM users u
+                WHERE u.role = 'hr lead'
+                UNION
+                SELECT ra.assigned_to_email
+                FROM requisition_assignments ra
+                WHERE ra.requisition_id = %s
+                UNION
+                SELECT ra.assigned_by_email
+                FROM requisition_assignments ra
+                WHERE ra.requisition_id = %s
+            """, (requisition_id, requisition_id))
+            recipients = [row['email'] for row in cursor.fetchall() if row.get("email")]
 
     except Exception as e:
-        logger.error(f"Error updating onboarding for candidate ID {candidate_id}: {e}", exc_info=True)
+        logger.error(f"Error updating onboarding for candidate {candidate_id}: {e}", exc_info=True)
         return jsonify(success=False, error=str(e))
-
     finally:
         conn.close()
+
+    # 🔹 Send Email using Microsoft Graph
+    if recipients and candidate_name and access_token:
+        email_body = f"""
+Hello Team,
+
+The onboarding details for candidate {candidate_name} (Requisition ID: {requisition_id}) have been updated.
+
+Final CTC: {final_ctc or 'N/A'}
+Planned Joining Date: {planned_joining_date or 'N/A'}
+
+Updated by: {user['email']}
+"""
+
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+
+        to_recipients = [{"emailAddress": {"address": email}} for email in recipients]
+
+        message = {
+            "message": {
+                "subject": f"Onboarding Update - {candidate_name}",
+                "body": {
+                    "contentType": "Text",
+                    "content": email_body
+                },
+                "toRecipients": to_recipients
+            },
+            "saveToSentItems": "true"
+        }
+
+        response = requests.post(
+            'https://graph.microsoft.com/v1.0/me/sendMail',
+            headers=headers,
+            json=message
+        )
+
+        if response.status_code == 202:
+            logger.info(f"Onboarding email sent successfully to: {', '.join(recipients)}")
+        else:
+            logger.error(f"Failed to send onboarding email: {response.text}")
+
+    return jsonify(success=True)
+
+
+
+@app.route('/update_actual_joining/<int:candidate_id>', methods=['POST'])
+def update_actual_joining(candidate_id):
+    data = request.get_json()
+    actual_joining_date = data.get('actual_joining_date')
+
+    logger.info(f"Updating actual joining date for candidate ID: {candidate_id} to {actual_joining_date}")
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE candidates
+                SET actual_joining_date = %s
+                WHERE id = %s
+            """, (actual_joining_date or None, candidate_id))
+        conn.commit()
+        return jsonify(success=True)
+    except Exception as e:
+        logger.error(f"Error updating actual joining date: {e}", exc_info=True)
+        return jsonify(success=False, error=str(e))
+    finally:
+        conn.close()
+
 
 
 @app.route('/view_offer/<int:candidate_id>')
@@ -1028,10 +2272,6 @@ def view_offer(candidate_id):
     logger.warning(f"Offer letter not found for candidate ID: {candidate_id}")
     flash("Offer letter not found.")
     return "Offer letter not found", 404
-
-
-
-
 
 
 @app.route('/download_resume/<int:candidate_id>')
@@ -1169,15 +2409,56 @@ def candidate_detail(id):
                            next_pending_level=next_pending_level,
                            user=user)
 
+@app.route('/update_offer_status/<int:candidate_id>', methods=['POST'])
+def update_offer_status(candidate_id):
+    user = session.get('user')
+    if not user:
+        return jsonify(success=False, message="Unauthorized"), 401
+
+    data = request.json
+    new_offer_status = data.get('offer_status')
+
+    if new_offer_status not in ['Accepted', 'Backed Out', None]: # Include None for initially not set
+        return jsonify(success=False, message="Invalid offer status provided."), 400
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE candidates
+                SET offer_status = %s
+                WHERE id = %s
+            """, (new_offer_status, candidate_id))
+            conn.commit()
+            logging.info(f"Candidate {candidate_id} offer status updated to {new_offer_status} by {user['email']}.")
+            return jsonify(success=True, message="Offer status updated successfully.")
+
+    except Exception as e:
+        conn.rollback()
+        logging.exception(f"Error updating offer status for candidate ID {candidate_id}:")
+        return jsonify(success=False, message=f"Error updating offer status: {e}"), 500
+    finally:
+        conn.close()
 
 
-@app.route('/submit_rating/<int:candidate_id>/<int:level>', methods=['POST'])
+
+@app.route('/submit_rating/<int:candidate_id>/<level>', methods=['POST'])
 def submit_rating(candidate_id, level):
     user = session.get('user')
-    logger.info(f"{user['email']} is submitting rating for candidate {candidate_id} at level {level}")
+    access_token = get_otpluat_token()
+
+    try:
+        level_num = int(str(level).replace("Level-", ""))
+    except ValueError:
+        flash("Invalid level format.", "danger")
+        return redirect(url_for('candidate_detail', id=candidate_id))
+
+    logger.info(f"{user['email']} is submitting rating for candidate {candidate_id} at level {level_num}")
+
     remarks = request.form.get('remarks')
-    
-    # Extract rating values from the form
+    action = request.form.get('action')  # 'selected', 'rejected', or 'on_hold'
+
+    # Extract ratings
     communication_skills = request.form.get('communication_skills')
     technical_skills = request.form.get('technical_skills')
     learning_ability = request.form.get('learning_ability')
@@ -1185,22 +2466,49 @@ def submit_rating(candidate_id, level):
     cultural_fitment = request.form.get('cultural_fitment')
 
     conn = get_db_connection()
+    candidate_name = None
+    recipients = []
+
     try:
-        with conn.cursor() as cursor:
-            # Find interviewer and requisition ID
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            # Fetch interviewer and requisition
             cursor.execute("""
-                SELECT ih.id AS interviewer_id, ih.requisition_id
+                SELECT ih.id AS interviewer_id, ih.requisition_id, c.name AS candidate_name
                 FROM interview_hierarchy ih
                 JOIN candidates c ON ih.requisition_id = c.requisition_id
                 WHERE c.id = %s AND ih.level = %s
             """, (candidate_id, level))
             result = cursor.fetchone()
 
-            if result:
-                interviewer_id = result['interviewer_id']
-                requisition_id = result['requisition_id']
+            if not result:
+                flash("Interview hierarchy not found.", "danger")
+                return redirect(url_for('candidate_detail', id=candidate_id))
 
-                # Insert into ratings table
+            interviewer_id = result['interviewer_id']
+            requisition_id = result['requisition_id']
+            candidate_name = result['candidate_name']
+
+            # 🔑 Check if rating already exists
+            cursor.execute("""
+                SELECT id, status FROM ratings
+                WHERE candidate_id = %s AND interviewer_id = %s
+            """, (candidate_id, interviewer_id))
+            existing_rating = cursor.fetchone()
+
+            if existing_rating:
+                if existing_rating['status'] == "on_hold" and action in ("selected", "rejected"):
+                    # ✅ Update only status (don’t overwrite ratings)
+                    cursor.execute("""
+                        UPDATE ratings
+                        SET status = %s, remarks = %s
+                        WHERE id = %s
+                    """, (action, remarks, existing_rating['id']))
+                else:
+                    # Prevent duplicate insert if already finalised
+                    flash("This candidate already has a final decision.", "warning")
+                    return redirect(url_for('candidate_detail', id=candidate_id))
+            else:
+                # ✅ Insert new rating
                 cursor.execute("""
                     INSERT INTO ratings (
                         candidate_id, requisition_id, interviewer_id,
@@ -1212,20 +2520,84 @@ def submit_rating(candidate_id, level):
                     candidate_id, requisition_id, interviewer_id,
                     communication_skills, technical_skills, learning_ability,
                     problem_solving, cultural_fitment,
-                    remarks, 'submitted'
+                    remarks, action
                 ))
-                conn.commit()
-                logger.info(f"Rating submitted successfully for candidate {candidate_id}, level {level}")
 
-        flash("Rating submitted successfully.", "success")
+            # Always mark interview as completed
+            cursor.execute("""
+                UPDATE interview_schedule
+                SET status = 'completed'
+                WHERE candidate_id = %s AND level = %s
+            """, (candidate_id, level_num))
+
+            conn.commit()
+
+            # Fetch recipients for email
+            cursor.execute("""
+                SELECT DISTINCT u.email
+                FROM users u
+                WHERE u.role = 'hr lead'
+                UNION
+                SELECT ra.assigned_to_email
+                FROM requisition_assignments ra
+                WHERE ra.requisition_id = %s
+                UNION
+                SELECT ra.assigned_by_email
+                FROM requisition_assignments ra
+                WHERE ra.requisition_id = %s
+            """, (requisition_id, requisition_id))
+            recipients = [row['email'] for row in cursor.fetchall()]
+
     except Exception as e:
         logger.exception(f"Submit rating error for candidate {candidate_id}, level {level}")
-        print("Submit rating error:", e)
         flash("Error submitting rating.", "danger")
+        return redirect(url_for('candidate_detail', id=candidate_id))
     finally:
         conn.close()
 
+    # ✅ Send email only when final decision is made
+    if action in ("selected", "rejected") and recipients and candidate_name and access_token:
+        email_body = f"""
+Hello Team,
+
+The interview for {candidate_name} at {level} has been completed.
+
+Result: {action.title()}
+
+Remarks: {remarks or 'N/A'}
+
+Submitted by: {user['email']}
+"""
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        to_recipients = [{"emailAddress": {"address": email}} for email in recipients]
+
+        message = {
+            "message": {
+                "subject": f"Interview {level} Completed - {candidate_name}",
+                "body": {"contentType": "Text", "content": email_body},
+                "toRecipients": to_recipients
+            },
+            "saveToSentItems": "true"
+        }
+
+        response = requests.post(
+            'https://graph.microsoft.com/v1.0/users/otpluat@orientindia.net/sendMail',
+            headers=headers,
+            json=message
+        )
+
+        if response.status_code == 202:
+            logger.info(f"Email sent successfully to: {', '.join(recipients)}")
+        else:
+            logger.error(f"Failed to send email: {response.text}")
+
+    flash(f"Rating submitted as '{action.title()}'.", "success")
     return redirect(url_for('candidate_detail', id=candidate_id))
+
+
 
 
 
@@ -1243,108 +2615,156 @@ def schedule_interview(candidate_id):
     cursor = connection.cursor(pymysql.cursors.DictCursor)
 
     cursor.execute("""
-        SELECT level, interview_datetime, status FROM interview_schedule
+        SELECT level, interview_datetime, interview_type, status FROM interview_schedule
         WHERE candidate_id = %s
     """, (candidate_id,))
-    scheduled_interviews = {
-        row['level']: {
+
+    scheduled_interviews = {}
+    for row in cursor.fetchall():
+        level_val = row['level']
+        if isinstance(level_val, str) and level_val.startswith("Level-"):
+            level_val = int(level_val.replace("Level-", ""))
+        else:
+            level_val = int(level_val)
+        scheduled_interviews[level_val] = {
             'interview_datetime': row['interview_datetime'],
-            'status': row['status']
-        } for row in cursor.fetchall()
-    }
+            'status': row['status'],
+            'interview_type': row.get('interview_type', '')
+        }
 
     if request.method == 'POST':
-        level = int(request.form['level'])
+        level_str = request.form['level']
+        level = int(level_str.replace("Level-", "")) if level_str.startswith("Level-") else int(level_str)
+
         interview_datetime_str = request.form['interview_datetime']
         interview_datetime = datetime.strptime(interview_datetime_str, '%Y-%m-%dT%H:%M')
+        interview_type = request.form.get('interview_type')
 
-        logger.info(f"Scheduling interview: candidate {candidate_id}, level {level}, datetime {interview_datetime_str}")
+        # ✅ FIX: Compare DATE only. This allows all of TODAY'S entries to send emails.
+        ist = pytz.timezone('Asia/Kolkata')
+        current_time_ist = datetime.now(ist).replace(tzinfo=None)
+
+        is_backdated = interview_datetime < current_time_ist
 
         if level > 1:
             previous = scheduled_interviews.get(level - 1)
             if not previous or previous['status'] != 'completed':
-                logger.warning(f"Cannot schedule Level {level} without completing Level {level - 1}")
                 flash(f"You must complete Level {level - 1} before scheduling Level {level}.", "danger")
                 return redirect(request.url)
 
         cursor.execute("""
-            SELECT ih.*, c.email as candidate_email, c.name as candidate_name
+            SELECT ih.*, c.email as candidate_email, c.name as candidate_name, c.requisition_id
             FROM interview_hierarchy ih
             JOIN candidates c ON ih.requisition_id = c.requisition_id
-            WHERE c.id = %s AND ih.level = %s
-        """, (candidate_id, level))
+            WHERE c.id = %s AND (ih.level = %s OR ih.level = %s)
+        """, (candidate_id, level, f"Level-{level}"))
         result = cursor.fetchone()
 
         if not result:
-            logger.error(f"No interviewer found for candidate {candidate_id}, level {level}")
             flash('Invalid level or candidate', 'danger')
             return redirect(request.url)
 
+        # 1. Save or Update the record first
         cursor.execute("""
-            INSERT INTO interview_schedule (candidate_id, level, interview_datetime, interviewer_name, interviewer_email, status)
-            VALUES (%s, %s, %s, %s, %s, 'pending')
-            ON DUPLICATE KEY UPDATE interview_datetime = VALUES(interview_datetime)
-        """, (candidate_id, level, interview_datetime_str, result['interviewer_name'], result['interviewer_email']))
+            INSERT INTO interview_schedule (
+                candidate_id, requisition_id, level, interview_datetime, 
+                interviewer_name, interviewer_email, status, interview_type
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+                interview_datetime = VALUES(interview_datetime), 
+                interview_type = VALUES(interview_type)
+        """, (candidate_id, result['requisition_id'], level, interview_datetime_str,
+              result['interviewer_name'], result['interviewer_email'], 'pending', interview_type))
         connection.commit()
 
-        access_token = session.get('access_token')
-        try:
-            send_teams_invite(
-                interviewer_email=result['interviewer_email'],
-                candidate_email=result['candidate_email'],
-                start_time=interview_datetime,
-                duration_minutes=30,
-                subject=f"Interview for Candidate {result['candidate_name']} - Level {level}",
-                location="Microsoft Teams Meeting",
-                description="This is a scheduled interview. Please be on time.",
-                access_token=access_token
-            )
-            logger.info(f"Teams invite sent to {result['interviewer_email']} and {result['candidate_email']}")
-        except Exception as e:
-            logger.exception("Error sending Teams invite")
-            flash("Interview scheduled, but failed to send Teams invite.", "warning")
+        # 2. Only trigger external APIs if NOT backdated (Now allowing all of today)
+        if not is_backdated:
+            access_token = session.get('access_token')
+            if access_token:
+                try:
+                    event_id = send_teams_invite(
+                        interviewer_email=result['interviewer_email'],
+                        candidate_email=result['candidate_email'],
+                        start_time=interview_datetime,
+                        duration_minutes=30,
+                        subject=f"Interview for {result['candidate_name']} - Level {level}",
+                        location="Microsoft Teams" if interview_type == "Virtual" else "Office",
+                        description="Scheduled interview. Please be on time.",
+                        access_token=access_token
+                    )
 
-        # ✅ Schedule one-time reminder exactly 5 mins after interview start
-        reminder_time = interview_datetime + timedelta(minutes=5)
-        job_id = f"reminder_{candidate_id}_{level}"
+                    if event_id:
+                        cursor.execute("""
+                            UPDATE interview_schedule
+                            SET teams_event_id = %s
+                            WHERE candidate_id = %s AND level = %s
+                        """, (event_id, candidate_id, level))
+                        connection.commit()
+                        logger.info(f"Teams Event ID {event_id} saved successfully.")
+                    else:
+                        logger.warning("send_teams_invite returned None. Check Graph API permissions.")
 
-        try:
-            scheduler.add_job(
-                func=send_interview_feedback_reminder,
-                trigger='date',
-                run_date=reminder_time,
-                args=[candidate_id, level, access_token],
-                id=job_id,
-                replace_existing=True
-            )
-            logger.info(f"Scheduled reminder job {job_id} at {reminder_time}")
-        except Exception as e:
-            logger.error(f"Failed to schedule reminder job {job_id}: {e}")
+                except Exception as e:
+                    logger.exception("Error during Teams invite process")
+                    flash("Interview saved, but calendar invite failed.", "warning")
+
+                # Reminder Job
+                try:
+                    reminder_time = interview_datetime + timedelta(minutes=5)
+                    scheduler.add_job(
+                        func=send_interview_feedback_reminder,
+                        trigger='date',
+                        run_date=reminder_time,
+                        args=[candidate_id, level, access_token],
+                        id=f"reminder_{candidate_id}_{level}",
+                        replace_existing=True
+                    )
+                except Exception as e:
+                    logger.error(f"Reminder scheduling failed: {e}")
+            else:
+                logger.error("No access_token in session. Cannot send invite.")
+                flash("Session expired. Please log in again to send invites.", "danger")
+        else:
+            logger.info(f"Entry for {interview_datetime_str} is backdated. Skipping Teams invite.")
 
         flash(f"Interview for Level {level} scheduled successfully.", "success")
         return redirect(url_for('schedule_interview', candidate_id=candidate_id))
 
-    return render_template(
-        'schedule_interview.html',
-        candidate_id=candidate_id,
-        hierarchy=get_hierarchy(candidate_id),
-        scheduled=scheduled_interviews,
-        user=session['user']
-    )
+    return render_template('schedule_interview.html', candidate_id=candidate_id,
+                           hierarchy=get_hierarchy(candidate_id), scheduled=scheduled_interviews, user=session['user'])
+
 
 def get_hierarchy(candidate_id):
     logging.info(f"Fetching hierarchy for candidate ID: {candidate_id}")
     cursor = get_db_connection().cursor(pymysql.cursors.DictCursor)
     cursor.execute("SELECT requisition_id FROM candidates WHERE id = %s", (candidate_id,))
     req = cursor.fetchone()
+
     cursor.execute("SELECT * FROM interview_hierarchy WHERE requisition_id = %s ORDER BY level", (req['requisition_id'],))
-    return cursor.fetchall()
+    hierarchy = cursor.fetchall()
+
+    # ✅ Normalize hierarchy levels (store both int and display string)
+    for row in hierarchy:
+        if isinstance(row['level'], str) and row['level'].startswith("Level-"):
+            row['level'] = int(row['level'].replace("Level-", ""))
+        else:
+            row['level'] = int(row['level'])
+        row['level_display'] = f"Level-{row['level']}"
+
+    return hierarchy
+
+
 
 def send_teams_invite(interviewer_email, candidate_email, start_time, duration_minutes, subject, location, description, access_token):
     logging.info(f"Sending Teams invite to {interviewer_email} and {candidate_email} for {start_time}")
-    # Ensure timezone-aware datetime (UTC)
+
+    # ✅ FIX: Instead of localizing to UTC, localize to IST (Asia/Kolkata)
+    local_tz = pytz.timezone("Asia/Kolkata")
     if start_time.tzinfo is None:
-        start_time = pytz.utc.localize(start_time)
+        start_time = local_tz.localize(start_time)
+    else:
+        start_time = start_time.astimezone(local_tz)
 
     end_time = start_time + timedelta(minutes=duration_minutes)
 
@@ -1360,6 +2780,7 @@ def send_teams_invite(interviewer_email, candidate_email, start_time, duration_m
             "content": description
         },
         "start": {
+            # Format: 2023-11-10T14:30:00
             "dateTime": start_time.strftime('%Y-%m-%dT%H:%M:%S'),
             "timeZone": "Asia/Kolkata"
         },
@@ -1391,17 +2812,32 @@ def send_teams_invite(interviewer_email, candidate_email, start_time, duration_m
     }
 
     response = requests.post(
-        f"https://graph.microsoft.com/v1.0/users/otpluat@orientindia.net/events",
+        "https://graph.microsoft.com/v1.0/me/events",
         headers=headers,
         json=event_payload
     )
 
     if response.status_code >= 400:
         logging.error(f"Failed to send Teams invite: {response.status_code} - {response.text}")
-        raise Exception(f"Failed to send Teams invite: {response.status_code} {response.text}")
+        # Return None so the main route knows the invite failed
+        return None
 
-    logging.info("Teams invite sent successfully.")
-    return response.json()
+    event = response.json()
+    logging.info(f"Teams invite sent successfully. Event ID: {event.get('id')}")
+    return event.get('id')
+
+def delete_teams_event(event_id, access_token):
+    url = f"https://graph.microsoft.com/v1.0/users/otpluat@orientindia.net/events/{event_id}"
+    headers = {
+        'Authorization': f'Bearer {access_token}'
+    }
+
+    response = requests.delete(url, headers=headers)
+    if response.status_code in (204, 200):
+        logging.info(f"Deleted previous Teams event {event_id}")
+    else:
+        logging.warning(f"Failed to delete event {event_id}: {response.status_code} {response.text}")
+
 
 @app.route('/edit_schedule/<int:candidate_id>/<int:level>', methods=['GET', 'POST'])
 def edit_schedule(candidate_id, level):
@@ -1409,57 +2845,75 @@ def edit_schedule(candidate_id, level):
     conn = get_db_connection()
     cursor = conn.cursor(pymysql.cursors.DictCursor)
 
-    if request.method == 'POST':
-        new_time_str = request.form['interview_datetime']
-        new_time = datetime.strptime(new_time_str, '%Y-%m-%dT%H:%M')  # Adjust format if needed
-        logging.info(f"Updating interview time to {new_time} for candidate {candidate_id}, level {level}")
+    try:
+        if request.method == 'POST':
+            new_time_str = request.form['interview_datetime']
+            new_time = datetime.strptime(new_time_str, '%Y-%m-%dT%H:%M')
+            interview_type = request.form['interview_type']
 
-        cursor.execute("""
-            UPDATE interview_schedule
-            SET interview_datetime = %s
-            WHERE candidate_id = %s AND level = %s
-        """, (new_time, candidate_id, level))
-        conn.commit()
+            # ✅ 1. IST Backdated Check
+            ist = pytz.timezone('Asia/Kolkata')
+            current_time_ist = datetime.now(ist).replace(tzinfo=None)
+            is_backdated = new_time < current_time_ist
 
-        # Fetch required details
-        cursor.execute("""
-            SELECT i.interviewer_email, c.email AS candidate_email
-            FROM interview_schedule i
-            JOIN candidates c ON i.candidate_id = c.id
-            WHERE i.candidate_id = %s AND i.level = %s
-        """, (candidate_id, level))
-        result = cursor.fetchone()
+            cursor.execute("""
+                SELECT i.interviewer_email, c.email AS candidate_email, i.teams_event_id
+                FROM interview_schedule i
+                JOIN candidates c ON i.candidate_id = c.id
+                WHERE i.candidate_id = %s AND i.level = %s
+            """, (candidate_id, level))
+            result = cursor.fetchone()
 
-        access_token = session.get('access_token')
-        if result:
-            interviewer_email = result['interviewer_email']
-            candidate_email = result['candidate_email']
-            duration_minutes = 30
-            subject = f"Interview - Level {level}"
-            location = "Microsoft Teams"
-            description = "This is an automated interview invitation. Please be prepared on time."
-            access_token = access_token  # Replace with your function to get a valid token
+            access_token = session.get('access_token')
+            event_id = result['teams_event_id'] if result else None
 
-            logging.info(f"Sending updated invite to {interviewer_email} and {candidate_email}")
+            if result:
+                # ✅ 2. Only handle Teams integration if NOT backdated
+                if not is_backdated:
+                    # Delete old event if it exists
+                    if result['teams_event_id']:
+                        try:
+                            delete_teams_event(result['teams_event_id'], access_token)
+                        except Exception as e:
+                            logging.error(f"Failed to delete old event: {e}")
 
-            send_teams_invite(
-                interviewer_email,
-                candidate_email,
-                new_time,
-                duration_minutes,
-                subject,
-                location,
-                description,
-                access_token
-            )
+                    # Create new Teams event
+                    event_id = send_teams_invite(
+                        interviewer_email=result['interviewer_email'],
+                        candidate_email=result['candidate_email'],
+                        start_time=new_time,
+                        duration_minutes=30,
+                        subject=f"Interview - Level {level} (Updated)",
+                        location="Microsoft Teams" if interview_type == "Virtual" else "Office",
+                        description="This interview schedule has been updated. Please check the new timing.",
+                        access_token=access_token
+                    )
+                else:
+                    # If it IS backdated, we don't create a new event.
+                    # We might want to keep the old event_id or null it out.
+                    # Usually, for backdated entries, we set the event_id to None.
+                    event_id = None
+                    logging.info("Edit is backdated. Skipping Teams invite creation.")
 
-        return redirect(url_for('schedule_interview', candidate_id=candidate_id))
+                # ✅ 3. Update schedule (Database always gets updated)
+                cursor.execute("""
+                    UPDATE interview_schedule
+                    SET interview_datetime = %s, interview_type = %s, teams_event_id = %s
+                    WHERE candidate_id = %s AND level = %s
+                """, (new_time, interview_type, event_id, candidate_id, level))
+                conn.commit()
 
-    # GET method
-    cursor.execute("SELECT * FROM interview_schedule WHERE candidate_id = %s AND level = %s", (candidate_id, level))
-    schedule = cursor.fetchone()
-    return render_template('edit_schedule.html', schedule=schedule)
+            flash("Interview schedule updated successfully.", "success")
+            return redirect(url_for('schedule_interview', candidate_id=candidate_id))
 
+        # GET request
+        cursor.execute("SELECT * FROM interview_schedule WHERE candidate_id = %s AND level = %s", (candidate_id, level))
+        schedule = cursor.fetchone()
+        return render_template('edit_schedule.html', schedule=schedule)
+
+    finally:
+        cursor.close()
+        conn.close()
 
 # ------------------------------------------------------------------------------------#
 @app.route('/logout')
@@ -1589,7 +3043,7 @@ def download_cv(profile_id):
     if profile and profile['cv']:
         # CV is stored as a binary object in the database
         cv_data = profile['cv']
-        
+
         # Check for PDF and DOC file types based on file signature (magic bytes)
         if cv_data.startswith(b'%PDF'):
             mime_type = 'application/pdf'
@@ -1605,7 +3059,7 @@ def download_cv(profile_id):
 
         # Send the file without download (open in a new tab)
         return send_file(io.BytesIO(cv_data), mimetype=mime_type, download_name=filename, as_attachment=False)
-    
+
     flash('CV not found.')
     return redirect(url_for('view_repository', profile_id=profile_id))
 
@@ -1733,10 +3187,421 @@ HR Team
         conn.close()
 
 
+# ==========================================
+# QUESTION MANAGEMENT ROUTES
+# ==========================================
+
+# Use the exact path you provided
+QUESTION_SETS_BASE_DIR = r"C:\Users\abhishekdubey\PycharmProjects\HR Portal\Question_set"
+
+@app.route('/question_sets/create', methods=['POST'])
+def create_question_set():
+    if 'user' not in session or session['user']['role'] not in ['hr', 'admin']:
+        return redirect(url_for('home'))
+
+    folder_name = request.form.get('folder_name', '').strip().lower().replace(' ', '-')
+    initial_exam_title = request.form.get('initial_exam_title', '').strip()
+
+    if not folder_name or not initial_exam_title:
+        flash("Folder name and Exam title are required.", "danger")
+        return redirect(url_for('home', page='question_sets'))
+
+    folder_name = secure_filename(folder_name)
+    folder_path = os.path.join(QUESTION_SETS_BASE_DIR, folder_name)
+    data_dir = os.path.join(folder_path, 'data')
+    json_path = os.path.join(data_dir, 'questions.json')
+
+    if os.path.exists(folder_path):
+        flash("Question Set folder already exists.", "warning")
+    else:
+        try:
+            os.makedirs(data_dir, exist_ok=True)
+
+            # Create initial JSON with one empty exam ready to be filled
+            initial_data = {
+                "exams": [
+                    {
+                        "id": f"exam-{int(datetime.now().timestamp())}",
+                        "title": initial_exam_title,
+                        "durationMinutes": 60,
+                        "secondsPerQuestion": 120,
+                        "passPercent": 70,
+                        "questions": []
+                    }
+                ]
+            }
+
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(initial_data, f, indent=2)
+
+            flash(f"Successfully created new question set: {folder_name}", "success")
+        except Exception as e:
+            logging.error(f"Error creating folder: {e}")
+            flash("Error creating folder. Check server permissions.", "danger")
+
+    return redirect(url_for('home', page='question_sets'))
 
 
+@app.route('/question_sets/<folder_name>/create_exam', methods=['POST'])
+def create_exam(folder_name):
+    if 'user' not in session or session['user']['role'] not in ['hr', 'admin']:
+        return redirect(url_for('home'))
+
+    exam_title = request.form.get('exam_title', '').strip()
+    if not exam_title:
+        flash("Exam title is required.", "danger")
+        return redirect(url_for('home', page='question_sets'))
+
+    folder_path = os.path.join(QUESTION_SETS_BASE_DIR, folder_name)
+    json_path = os.path.join(folder_path, 'data', 'questions.json')
+
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, 'r', encoding='utf-8-sig') as f:
+                data = json.load(f)
+
+            new_exam = {
+                "id": f"exam-{int(datetime.now().timestamp())}",
+                "title": exam_title,
+                "durationMinutes": 60,
+                "secondsPerQuestion": 120,
+                "passPercent": 70,
+                "questions": []
+            }
+            data['exams'].append(new_exam)
+
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+
+            flash(f"Successfully added new exam: {exam_title}", "success")
+        except Exception as e:
+            flash(f"Error adding exam: {e}", "danger")
+    else:
+        flash("Question set folder not found.", "danger")
+
+    return redirect(url_for('home', page='question_sets'))
+
+
+@app.route('/question_sets/<folder_name>', methods=['GET', 'POST'])
+def edit_question_set(folder_name):
+    if 'user' not in session or session['user']['role'] not in ['hr', 'admin']:
+        return redirect(url_for('home'))
+
+    folder_path = os.path.join(QUESTION_SETS_BASE_DIR, folder_name)
+    json_path = os.path.join(folder_path, 'data', 'questions.json')
+
+    if not os.path.exists(json_path):
+        flash("Question set file not found.", "danger")
+        return redirect(url_for('home', page='question_sets'))
+
+    # Handle raw JSON save (This is the ONLY action this route handles now)
+    if request.method == 'POST' and 'save_json' in request.form:
+        raw_json = request.form.get('json_content')
+        try:
+            parsed_json = json.loads(raw_json)  # Validate JSON
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(parsed_json, f, indent=2)
+            flash("JSON updated successfully.", "success")
+        except json.JSONDecodeError as e:
+            flash(f"Invalid JSON format: {str(e)}", "danger")
+        return redirect(url_for('edit_question_set', folder_name=folder_name))
+
+    with open(json_path, 'r', encoding='utf-8-sig') as f:
+        data = json.load(f)
+
+    json_string = json.dumps(data, indent=4)
+
+    # Render home.html with the details page
+    return render_template('home.html',
+                           page='question_set_details',
+                           folder_name=folder_name,
+                           exams=data.get('exams', []),
+                           json_string=json_string,
+                           user=session['user'])
+
+
+@app.route('/question_sets/<folder_name>/exam/<exam_id>', methods=['GET', 'POST'])
+def view_exam(folder_name, exam_id):
+    if 'user' not in session or session['user']['role'] not in ['hr', 'admin']:
+        return redirect(url_for('home'))
+
+    folder_path = os.path.join(QUESTION_SETS_BASE_DIR, folder_name)
+    json_path = os.path.join(folder_path, 'data', 'questions.json')
+
+    if not os.path.exists(json_path):
+        flash("Question set file not found.", "danger")
+        return redirect(url_for('home', page='question_sets'))
+
+    with open(json_path, 'r', encoding='utf-8-sig') as f:
+        data = json.load(f)
+
+    exam_index = next((i for i, e in enumerate(data['exams']) if e.get('id') == exam_id), None)
+    if exam_index is None:
+        flash("Exam not found.", "danger")
+        return redirect(url_for('home', page='question_sets'))
+
+    exam = data['exams'][exam_index]
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+
+        if action == 'add_or_edit':
+            q_index = request.form.get('q_index')
+            q_text = request.form.get('question_text')
+            q_type = request.form.get('question_type', 'mcq')
+            explanation = request.form.get('explanation', '')
+
+            new_q = {
+                "id": f"q{len(exam['questions']) + 1}" if q_index == '-1' else exam['questions'][int(q_index)]['id'],
+                "type": q_type,
+                "text": q_text,
+                "explanation": explanation
+            }
+
+            if q_type == 'mcq':
+                options = []
+                for i in range(5):
+                    opt = request.form.get(f'option_{i}', '').strip()
+                    if opt:
+                        options.append(opt)
+
+                correct_answers = [int(x) for x in request.form.getlist('correct_answers')]
+                new_q.update({
+                    "options": options,
+                    "answerIndexes": correct_answers,
+                    "multi": len(correct_answers) > 1
+                })
+
+            elif q_type == 'text':
+                new_q["expected_answer"] = request.form.get('expected_answer', '')
+
+            elif q_type == 'draw':
+                new_q["drawing_prompt"] = request.form.get('drawing_prompt', 'Draw the solution in the provided space.')
+
+            elif q_type == 'code':
+                new_q["code_template"] = request.form.get('code_template', '')
+                new_q["language"] = request.form.get('language', 'python')
+
+            if q_index == '-1':
+                exam['questions'].append(new_q)
+            else:
+                exam['questions'][int(q_index)] = new_q
+
+            flash("Question saved successfully.", "success")
+
+        elif action == 'delete':
+            q_index = int(request.form.get('q_index'))
+            exam['questions'].pop(q_index)
+            flash("Question deleted.", "success")
+
+        data['exams'][exam_index] = exam
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+
+        return redirect(url_for('view_exam', folder_name=folder_name, exam_id=exam_id))
+
+    return render_template('home.html',
+                           page='exam_details',
+                           folder_name=folder_name,
+                           exam=exam,
+                           user=session['user'])
+
+
+@app.route('/api/get_exam_questions/<folder_name>/<exam_id>')
+def api_get_exam_questions(folder_name, exam_id):
+    # Construct the path to the JSON file
+    json_path = os.path.join(r"C:\Users\abhishekdubey\PycharmProjects\HR Portal\Question_set", folder_name, 'data',
+                             'questions.json')
+
+    # 1. Check if file exists
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, 'r', encoding='utf-8-sig') as f:
+                data = json.load(f)
+
+            # 2. Find the specific exam
+            exam = next((e for e in data.get('exams', []) if str(e.get('id')) == str(exam_id)), None)
+
+            if exam:
+                return jsonify(exam.get('questions', []))
+            else:
+                # Log a warning if the exam ID doesn't match
+                print(
+                    f"❌ Exam ID '{exam_id}' not found in {folder_name}. Available IDs: {[e.get('id') for e in data.get('exams', [])]}")
+                return jsonify({'error': 'Exam not found'}), 404
+
+        except Exception as e:
+            print(f"❌ Error parsing JSON for {folder_name}: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    print(f"❌ File not found at: {json_path}")
+    return jsonify({'error': 'File not found'}), 404
+
+
+@app.route('/requisition/<int:requisition_id>/assessment', methods=['GET', 'POST'])
+def requisition_assessment(requisition_id):
+    if 'user' not in session or session['user']['role'] not in ['hr', 'admin', 'hr lead']:
+        return redirect(url_for('home'))
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            # Fetch the assessment for this requisition
+            cursor.execute("SELECT * FROM assessments WHERE requisition_id = %s ORDER BY id DESC LIMIT 1",
+                           (requisition_id,))
+            assessment = cursor.fetchone()
+
+            if not assessment:
+                flash("No Level 2 Assessment found for this requisition.", "warning")
+                return redirect(url_for('view_requisition_details', requisition_id=requisition_id))
+
+            assessment_id = assessment['id']
+
+            if request.method == 'POST':
+                action = request.form.get('action')
+                q_type = request.form.get('question_type', 'MCQ_TEXT')
+
+                if action == 'add':
+                    cursor.execute("""
+                        INSERT INTO assessment_questions 
+                        (assessment_id, question_text, question_type, code_snippet, option_a, option_b, option_c, option_d, correct_option, expected_answer, difficulty)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        assessment_id, request.form.get('question_text'), q_type, request.form.get('code_snippet'),
+                        request.form.get('option_a'), request.form.get('option_b'), request.form.get('option_c'),
+                        request.form.get('option_d'),
+                        request.form.get('correct_option'), request.form.get('expected_answer'),
+                        request.form.get('difficulty')
+                    ))
+                    cursor.execute(
+                        "UPDATE assessments SET total_questions = (SELECT COUNT(*) FROM assessment_questions WHERE assessment_id = %s) WHERE id = %s",
+                        (assessment_id, assessment_id))
+                    flash("Question added.", "success")
+
+                elif action == 'edit':
+                    qid = request.form.get('qid')
+                    cursor.execute("""
+                        UPDATE assessment_questions 
+                        SET question_text=%s, question_type=%s, code_snippet=%s, option_a=%s, option_b=%s, option_c=%s, option_d=%s, correct_option=%s, expected_answer=%s, difficulty=%s
+                        WHERE id=%s AND assessment_id=%s
+                    """, (
+                        request.form.get('question_text'), q_type, request.form.get('code_snippet'),
+                        request.form.get('option_a'), request.form.get('option_b'), request.form.get('option_c'),
+                        request.form.get('option_d'),
+                        request.form.get('correct_option'), request.form.get('expected_answer'),
+                        request.form.get('difficulty'), qid, assessment_id
+                    ))
+                    flash("Question updated.", "success")
+
+                elif action == 'delete':
+                    qid = request.form.get('qid')
+                    cursor.execute("DELETE FROM assessment_questions WHERE id=%s AND assessment_id=%s",
+                                   (qid, assessment_id))
+                    cursor.execute(
+                        "UPDATE assessments SET total_questions = (SELECT COUNT(*) FROM assessment_questions WHERE assessment_id = %s) WHERE id = %s",
+                        (assessment_id, assessment_id))
+                    flash("Question deleted.", "success")
+
+                conn.commit()
+                return redirect(url_for('requisition_assessment', requisition_id=requisition_id))
+
+            # Fetch Questions for display
+            cursor.execute("SELECT * FROM assessment_questions WHERE assessment_id = %s ORDER BY id ASC",
+                           (assessment_id,))
+            questions = cursor.fetchall()
+
+            # Fetch requisition details for context (Job Title)
+            cursor.execute("SELECT job_title FROM requisitions WHERE id = %s", (requisition_id,))
+            requisition = cursor.fetchone()
+
+    finally:
+        conn.close()
+
+    return render_template('home.html', page='requisition_assessment', requisition=requisition,
+                           requisition_id=requisition_id, assessment=assessment, questions=questions,
+                           user=session['user'])
+
+@app.route('/default_assessment', methods=['GET', 'POST'])
+def default_assessment():
+    if 'user' not in session or session['user']['role'] not in ['hr', 'admin']:
+        return redirect(url_for('home'))
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            # Fetch the default assessment (ID = 1)
+            cursor.execute("SELECT * FROM assessments WHERE id = 1")
+            assessment = cursor.fetchone()
+            if not assessment:
+                flash("Default assessment (ID: 1) not found in database.", "danger")
+                return redirect(url_for('home', page='question_sets'))
+
+            if request.method == 'POST':
+                action = request.form.get('action')
+                q_type = request.form.get('question_type', 'MCQ_TEXT')
+
+                if action == 'add':
+                    cursor.execute("""
+                        INSERT INTO assessment_questions 
+                        (assessment_id, question_text, question_type, code_snippet, option_a, option_b, option_c, option_d, correct_option, expected_answer, difficulty)
+                        VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        request.form.get('question_text'),
+                        q_type,
+                        request.form.get('code_snippet'),
+                        request.form.get('option_a'),
+                        request.form.get('option_b'),
+                        request.form.get('option_c'),
+                        request.form.get('option_d'),
+                        request.form.get('correct_option'),
+                        request.form.get('expected_answer'),
+                        request.form.get('difficulty')
+                    ))
+                    cursor.execute(
+                        "UPDATE assessments SET total_questions = (SELECT COUNT(*) FROM assessment_questions WHERE assessment_id = 1) WHERE id = 1")
+                    flash("Question added to Default Assessment.", "success")
+
+                elif action == 'edit':
+                    qid = request.form.get('qid')
+                    cursor.execute("""
+                        UPDATE assessment_questions 
+                        SET question_text=%s, question_type=%s, code_snippet=%s, option_a=%s, option_b=%s, option_c=%s, option_d=%s, correct_option=%s, expected_answer=%s, difficulty=%s
+                        WHERE id=%s AND assessment_id=1
+                    """, (
+                        request.form.get('question_text'),
+                        q_type,
+                        request.form.get('code_snippet'),
+                        request.form.get('option_a'),
+                        request.form.get('option_b'),
+                        request.form.get('option_c'),
+                        request.form.get('option_d'),
+                        request.form.get('correct_option'),
+                        request.form.get('expected_answer'),
+                        request.form.get('difficulty'),
+                        qid
+                    ))
+                    flash("Question updated.", "success")
+
+                elif action == 'delete':
+                    qid = request.form.get('qid')
+                    cursor.execute("DELETE FROM assessment_questions WHERE id=%s AND assessment_id=1", (qid,))
+                    cursor.execute(
+                        "UPDATE assessments SET total_questions = (SELECT COUNT(*) FROM assessment_questions WHERE assessment_id = 1) WHERE id = 1")
+                    flash("Question deleted.", "success")
+
+                conn.commit()
+                return redirect(url_for('default_assessment'))
+
+            # Fetch Questions for display
+            cursor.execute("SELECT * FROM assessment_questions WHERE assessment_id = 1 ORDER BY id ASC")
+            questions = cursor.fetchall()
+
+    finally:
+        conn.close()
+
+    return render_template('home.html', page='default_assessment', assessment=assessment, questions=questions,
+                           user=session['user'])
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5005)
-
-
+    port = int(os.getenv('PORT', 8011))
+    app.run(debug=True, use_reloader=False, host='0.0.0.0', port=port)
